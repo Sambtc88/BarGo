@@ -5,10 +5,10 @@ import http.cookies
 
 PORT = 2727
 
-# راه‌اندازی پایگاه داده با نام کاربری و رمز عبور دلخواه شما
 def init_db():
     conn = sqlite3.connect("barbarg_bandar.db", check_same_thread=False)
     c = conn.cursor()
+    # جدول پنل‌ها (خریداران پنل / مشتریان)
     c.execute('''CREATE TABLE IF NOT EXISTS panels (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     username TEXT UNIQUE,
@@ -17,6 +17,7 @@ def init_db():
                     is_admin INTEGER DEFAULT 0,
                     is_active INTEGER DEFAULT 1
                 )''')
+    # جدول پلاک‌ها و رانندگان هر پنل
     c.execute('''CREATE TABLE IF NOT EXISTS drivers (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     panel_id INTEGER,
@@ -29,8 +30,8 @@ def init_db():
                     group_num INTEGER DEFAULT 1,
                     is_active INTEGER DEFAULT 1
                 )''')
-    # ثبت نام کاربری DAVOOD و رمز عبور Dp9498Dp
-    c.execute("INSERT OR IGNORE INTO panels (username, password, max_plates, is_admin, is_active) VALUES ('DAVOOD', 'Dp9498Dp', 200, 1, 1)")
+    # ثبت ادمین اصلی (DAVOOD)
+    c.execute("INSERT OR IGNORE INTO panels (username, password, max_plates, is_admin, is_active) VALUES ('DAVOOD', 'Dp9498Dp', 1000, 1, 1)")
     conn.commit()
     return conn
 
@@ -57,6 +58,7 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
             username = cookie.get('session').value if 'session' in cookie else None
 
             if not username:
+                # صفحه لاگین
                 html = """<!DOCTYPE html>
                 <html lang="fa" dir="rtl">
                 <head>
@@ -74,7 +76,7 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                 </head>
                 <body>
                     <div class="login-card">
-                        <h2>ورود به باربرگ بندر</h2>
+                        <h2>ورود به سامانه باربرگ</h2>
                         <form method="POST" action="/login">
                             <input type="text" name="username" placeholder="نام کاربری" required>
                             <input type="password" name="password" placeholder="رمز عبور" required>
@@ -87,82 +89,157 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                 c = db_conn.cursor()
                 c.execute("SELECT id, max_plates, is_admin FROM panels WHERE username = ?", (username,))
                 panel_data = c.fetchone()
+                
+                if not panel_data:
+                    self.wfile.write("خطای کاربری".encode("utf-8"))
+                    return
+
                 panel_id, max_plates, is_admin = panel_data
 
-                c.execute("SELECT COUNT(*) FROM drivers WHERE panel_id = ?", (panel_id,))
-                current_plates_count = c.fetchone()[0]
+                if is_admin == 1:
+                    # داشبورد ادمین کل (DAVOOD): مدیریت خریداران پنل
+                    c.execute("SELECT id, username, max_plates FROM panels WHERE is_admin = 0")
+                    all_customers = c.fetchall()
 
-                c.execute("SELECT name, national_id, plate_part1, plate_letter, plate_part2, plate_iran, group_num FROM drivers WHERE panel_id = ?", (panel_id,))
-                drivers = c.fetchall()
+                    customers_html = ""
+                    for cust in all_customers:
+                        customers_html += f"<tr><td>{cust[1]}</td><td>{cust[2]} پلاک</td><td><a href='/delete_panel?id={cust[0]}' style='color:red;'>حذف</a></td></tr>"
 
-                drivers_html = ""
-                for d in drivers:
-                    drivers_html += f"<tr><td>{d[0]}</td><td>{d[1]}</td><td>{d[2]} {d[3]} {d[4]} - ایران {d[5]}</td><td>گروه {d[6]}</td></tr>"
-
-                html = f"""<!DOCTYPE html>
-                <html lang="fa" dir="rtl">
-                <head>
-                    <meta charset="UTF-8">
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <title>پنل مدیریت - باربرگ بندر</title>
-                    <style>
-                        body {{ font-family: Tahoma, sans-serif; background: #F2F5F8; margin: 0; padding: 0; direction: rtl; }}
-                        .header {{ background: #0277BD; color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; }}
-                        .container {{ padding: 15px; max-width: 600px; margin: auto; }}
-                        .card {{ background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 15px; }}
-                        input, select {{ width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; }}
-                        button {{ background: #0277BD; color: white; border: none; padding: 12px; width: 100%; border-radius: 8px; font-weight: bold; cursor: pointer; }}
-                        button:hover {{ background: #01579B; }}
-                        table {{ width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }}
-                        th, td {{ border: 1px solid #ddd; padding: 8px; text-align: center; }}
-                        th {{ background: #f0f0f0; }}
-                        .logout-btn {{ background: #D32F2F; width: auto; padding: 6px 12px; font-size: 12px; }}
-                    </style>
-                </head>
-                <body>
-                    <div class="header">
-                        <span>خوش آمدید، {username} (سقف پلاک: {current_plates_count}/{max_plates})</span>
-                        <a href="/logout"><button class="logout-btn">خروج</button></a>
-                    </div>
-                    <div class="container">
-                        <div class="card">
-                            <h3>ثبت پلاک و راننده جدید</h3>
-                            <form method="POST" action="/add_driver">
-                                <input type="text" name="name" placeholder="نام و نام خانوادگی راننده" required>
-                                <input type="text" name="nid" placeholder="کد ملی" required>
-                                <div style="display: flex; gap: 5px;">
-                                    <input type="text" name="p2" placeholder="سه‌رقم (مثل ۴۴۸)" required>
-                                    <input type="text" name="let" value="ع" placeholder="حرف" required>
-                                    <input type="text" name="p1" placeholder="دورقم (مثل ۵۵)" required>
-                                    <input type="text" name="iran" value="۸۴" placeholder="ایران" required>
-                                </div>
-                                <select name="group_num">
-                                    <option value="1">گروه ۱</option>
-                                    <option value="2">گروه ۲</option>
-                                    <option value="3">گروه ۳</option>
-                                </select>
-                                <button type="submit">ثبت پلاک در سامانه</button>
-                            </form>
+                    html = f"""<!DOCTYPE html>
+                    <html lang="fa" dir="rtl">
+                    <head>
+                        <meta charset="UTF-8">
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                        <title>مدیریت کل - باربرگ بندر</title>
+                        <style>
+                            body {{ font-family: Tahoma, sans-serif; background: #F2F5F8; margin: 0; padding: 0; direction: rtl; }}
+                            .header {{ background: #0277BD; color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; }}
+                            .container {{ padding: 15px; max-width: 600px; margin: auto; }}
+                            .card {{ background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 15px; }}
+                            input {{ width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; }}
+                            button {{ background: #2E7D32; color: white; border: none; padding: 12px; width: 100%; border-radius: 8px; font-weight: bold; cursor: pointer; }}
+                            table {{ width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }}
+                            th, td {{ border: 1px solid #ddd; padding: 8px; text-align: center; }}
+                            th {{ background: #f0f0f0; }}
+                            .logout-btn {{ background: #D32F2F; width: auto; padding: 6px 12px; font-size: 12px; color: white; text-decoration: none; border-radius: 5px; }}
+                        </style>
+                    </head>
+                    <body>
+                        <div class="header">
+                            <span>مدیر کل سامانه: {username}</span>
+                            <a href="/logout" class="logout-btn">خروج</a>
                         </div>
+                        <div class="container">
+                            <div class="card">
+                                <h3>ساخت پنل جدید برای مشتری (خرید اشتراک / پک پلاک)</h3>
+                                <form method="POST" action="/add_panel">
+                                    <input type="text" name="new_user" placeholder="نام کاربری مشتری" required>
+                                    <input type="text" name="new_pass" placeholder="رمز عبور مشتری" required>
+                                    <input type="number" name="max_plates" placeholder="سقف تعداد پلاک (مثلا 50 یا 100)" value="50" required>
+                                    <button type="submit">ایجاد پنل جدید</button>
+                                </form>
+                            </div>
 
-                        <div class="card">
-                            <h3>سوییچ سرور و وضعیت ربات</h3>
-                            <button style="background: #2E7D32; margin-bottom: 8px;" onclick="alert('عملیات روی سرور اصلی سامانه درون‌شهری آغاز شد.')">شروع عملیات (سرور سامانه درون‌شهری)</button>
-                            <button style="background: #E65100;" onclick="alert('ارتباط روی سرور آنتن موبایل (سیم‌کارت) سوییچ شد!')">سوییچ به سرور آنتن موبایل (موبایل هات‌اسپات)</button>
+                            <div class="card">
+                                <h3>لیست مشتریان و خریداران پنل</h3>
+                                <table>
+                                    <tr><th>نام کاربری</th><th>سقف پلاک</th><th>عملیات</th></tr>
+                                    {customers_html if customers_html else '<tr><td colspan="3">هنوز مشتری‌ای ثبت نشده است.</td></tr>'}
+                                </table>
+                            </div>
                         </div>
+                    </body>
+                    </html>"""
+                else:
+                    # داشبورد خریدار پنل (کاربر عادی)
+                    c.execute("SELECT COUNT(*) FROM drivers WHERE panel_id = ?", (panel_id,))
+                    current_plates_count = c.fetchone()[0]
 
-                        <div class="card">
-                            <h3>لیست پلاک‌های ثبت شده شما</h3>
-                            <table>
-                                <tr><th>نام راننده</th><th>کد ملی</th><th>پلاک</th><th>گروه</th></tr>
-                                {drivers_html if drivers_html else '<tr><td colspan="4">هنوز پلاک ثبت نشده است.</td></tr>'}
-                            </table>
+                    c.execute("SELECT name, national_id, plate_part1, plate_letter, plate_part2, plate_iran, group_num FROM drivers WHERE panel_id = ?", (panel_id,))
+                    drivers = c.fetchall()
+
+                    drivers_html = ""
+                    for d in drivers:
+                        drivers_html += f"<tr><td>{d[0]}</td><td>{d[1]}</td><td>{d[2]} {d[3]} {d[4]} - ایران {d[5]}</td><td>گروه {d[6]}</td></tr>"
+
+                    html = f"""<!DOCTYPE html>
+                    <html lang="fa" dir="rtl">
+                    <head>
+                        <meta charset="UTF-8">
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                        <title>پنل اختصاصی - باربرگ بندر</title>
+                        <style>
+                            body {{ font-family: Tahoma, sans-serif; background: #F2F5F8; margin: 0; padding: 0; direction: rtl; }}
+                            .header {{ background: #0277BD; color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; }}
+                            .container {{ padding: 15px; max-width: 600px; margin: auto; }}
+                            .card {{ background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 15px; }}
+                            input, select {{ width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; }}
+                            button {{ background: #0277BD; color: white; border: none; padding: 12px; width: 100%; border-radius: 8px; font-weight: bold; cursor: pointer; }}
+                            button:hover {{ background: #01579B; }}
+                            table {{ width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }}
+                            th, td {{ border: 1px solid #ddd; padding: 8px; text-align: center; }}
+                            th {{ background: #f0f0f0; }}
+                            .logout-btn {{ background: #D32F2F; width: auto; padding: 6px 12px; font-size: 12px; color: white; text-decoration: none; border-radius: 5px; }}
+                        </style>
+                    </head>
+                    <body>
+                        <div class="header">
+                            <span>خوش آمدید، {username} (پلاک‌های ثبت‌شده: {current_plates_count} از {max_plates})</span>
+                            <a href="/logout" class="logout-btn">خروج</a>
                         </div>
-                    </div>
-                </body>
-                </html>"""
+                        <div class="container">
+                            <div class="card">
+                                <h3>ثبت پلاک راننده جدید</h3>
+                                <form method="POST" action="/add_driver">
+                                    <input type="text" name="name" placeholder="نام و نام خانوادگی راننده" required>
+                                    <input type="text" name="nid" placeholder="کد ملی" required>
+                                    <div style="display: flex; gap: 5px;">
+                                        <input type="text" name="p2" placeholder="سه‌رقم (مثل ۴۴۸)" required>
+                                        <input type="text" name="let" value="ع" placeholder="حرف" required>
+                                        <input type="text" name="p1" placeholder="دورقم (مثل ۵۵)" required>
+                                        <input type="text" name="iran" value="۸۴" placeholder="ایران" required>
+                                    </div>
+                                    <select name="group_num">
+                                        <option value="1">گروه ۱</option>
+                                        <option value="2">گروه ۲</option>
+                                        <option value="3">گروه ۳</option>
+                                    </select>
+                                    <button type="submit">ثبت پلاک در سامانه</button>
+                                </form>
+                            </div>
+
+                            <div class="card">
+                                <h3>سوییچ سرور و وضعیت ربات</h3>
+                                <button style="background: #2E7D32; margin-bottom: 8px;" onclick="alert('عملیات روی سرور اصلی سامانه درون‌شهری آغاز شد.')">شروع عملیات (سرور سامانه)</button>
+                                <button style="background: #E65100;" onclick="alert('ارتباط روی سرور آنتن موبایل سوییچ شد!')">سوییچ به سرور آنتن موبایل (هات‌اسپات)</button>
+                            </div>
+
+                            <div class="card">
+                                <h3>لیست پلاک‌های ثبت‌شده شما</h3>
+                                <table>
+                                    <tr><th>نام راننده</th><th>کد ملی</th><th>پلاک</th><th>گروه</th></tr>
+                                    {drivers_html if drivers_html else '<tr><td colspan="4">هنوز پلاک ثبت نشده است.</td></tr>'}
+                                </table>
+                            </div>
+                        </div>
+                    </body>
+                    </html>"""
             
             self.wfile.write(html.encode("utf-8"))
+
+        elif path.startswith("/delete_panel"):
+            # حذف پنل مشتری توسط ادمین کل
+            query_components = urllib.parse.parse_qs(parsed_path.query)
+            panel_id_to_del = query_components.get("id", [None])[0]
+            if panel_id_to_del:
+                c = db_conn.cursor()
+                c.execute("DELETE FROM panels WHERE id = ? AND is_admin = 0", (panel_id_to_del,))
+                c.execute("DELETE FROM drivers WHERE panel_id = ?", (panel_id_to_del,))
+                db_conn.commit()
+            
+            self.send_response(303)
+            self.send_header('Location', '/')
+            self.end_headers()
 
     def do_POST(self):
         content_length = int(self.headers['Content-Length'])
@@ -187,6 +264,25 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_header('Location', '/')
                 self.end_headers()
 
+        elif self.path == "/add_panel":
+            # اضافه کردن پنل مشتری جدید توسط ادمین کل (DAVOOD)
+            new_user = params.get('new_user', [''])[0]
+            new_pass = params.get('new_pass', [''])[0]
+            max_plates = params.get('max_plates', ['50'])[0]
+
+            if new_user and new_pass:
+                try:
+                    c = db_conn.cursor()
+                    c.execute("INSERT INTO panels (username, password, max_plates, is_admin, is_active) VALUES (?, ?, ?, 0, 1)", 
+                              (new_user, new_pass, int(max_plates)))
+                    db_conn.commit()
+                except Exception as e:
+                    print("Error creating panel:", e)
+
+            self.send_response(303)
+            self.send_header('Location', '/')
+            self.end_headers()
+
         elif self.path == "/add_driver":
             cookie = http.cookies.SimpleCookie(self.headers.get('Cookie'))
             username = cookie.get('session').value if 'session' in cookie else None
@@ -195,23 +291,24 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                 c = db_conn.cursor()
                 c.execute("SELECT id, max_plates FROM panels WHERE username = ?", (username,))
                 panel = c.fetchone()
-                panel_id, max_plates = panel
+                if panel:
+                    panel_id, max_plates = panel
 
-                c.execute("SELECT COUNT(*) FROM drivers WHERE panel_id = ?", (panel_id,))
-                count = c.fetchone()[0]
+                    c.execute("SELECT COUNT(*) FROM drivers WHERE panel_id = ?", (panel_id,))
+                    count = c.fetchone()[0]
 
-                if count < max_plates:
-                    name = params.get('name', [''])[0]
-                    nid = params.get('nid', [''])[0]
-                    p2 = params.get('p2', [''])[0]
-                    let = params.get('let', [''])[0]
-                    p1 = params.get('p1', [''])[0]
-                    iran = params.get('iran', [''])[0]
-                    group_num = params.get('group_num', ['1'])[0]
+                    if count < max_plates:
+                        name = params.get('name', [''])[0]
+                        nid = params.get('nid', [''])[0]
+                        p2 = params.get('p2', [''])[0]
+                        let = params.get('let', [''])[0]
+                        p1 = params.get('p1', [''])[0]
+                        iran = params.get('iran', [''])[0]
+                        group_num = params.get('group_num', ['1'])[0]
 
-                    c.execute("INSERT INTO drivers (panel_id, name, national_id, plate_part1, plate_letter, plate_part2, plate_iran, group_num) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                              (panel_id, name, nid, p1, let, p2, iran, group_num))
-                    db_conn.commit()
+                        c.execute("INSERT INTO drivers (panel_id, name, national_id, plate_part1, plate_letter, plate_part2, plate_iran, group_num) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                  (panel_id, name, nid, p1, let, p2, iran, group_num))
+                        db_conn.commit()
 
             self.send_response(303)
             self.send_header('Location', '/')
