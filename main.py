@@ -5,7 +5,7 @@ import http.cookies
 
 PORT = 2727
 
-# راه‌اندازی پایگاه داده پیشرفته با جدول کاربران و پلاک‌ها
+# راه‌اندازی پایگاه داده با نام کاربری و رمز عبور دلخواه شما
 def init_db():
     conn = sqlite3.connect("barbarg_bandar.db", check_same_thread=False)
     c = conn.cursor()
@@ -29,8 +29,8 @@ def init_db():
                     group_num INTEGER DEFAULT 1,
                     is_active INTEGER DEFAULT 1
                 )''')
-    # ایجاد ادمین پیش‌فرض (نام کاربری: admin ، رمز: admin123)
-    c.execute("INSERT OR IGNORE INTO panels (username, password, max_plates, is_admin, is_active) VALUES ('admin', 'admin123', 200, 1, 1)")
+    # ثبت نام کاربری DAVOOD و رمز عبور Dp9498Dp
+    c.execute("INSERT OR IGNORE INTO panels (username, password, max_plates, is_admin, is_active) VALUES ('DAVOOD', 'Dp9498Dp', 200, 1, 1)")
     conn.commit()
     return conn
 
@@ -53,12 +53,10 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header("Content-type", "text/html; charset=utf-8")
             self.end_headers()
             
-            # بررسی لاگین بودن کاربر از طریق کوکی
             cookie = http.cookies.SimpleCookie(self.headers.get('Cookie'))
             username = cookie.get('session').value if 'session' in cookie else None
 
             if not username:
-                # صفحه لاگین
                 html = """<!DOCTYPE html>
                 <html lang="fa" dir="rtl">
                 <head>
@@ -66,7 +64,7 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                     <meta name="viewport" content="width=device-width, initial-scale=1.0">
                     <title>ورود - باربرگ بندر</title>
                     <style>
-                        body { font-family: Tahoma, sans-serif; background: #0277BD; margin: 0; display: flex; align-items: center; justify-content: height; height: 100vh; direction: rtl; }
+                        body { font-family: Tahoma, sans-serif; background: #0277BD; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; direction: rtl; }
                         .login-card { background: white; padding: 25px; border-radius: 12px; width: 320px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); margin: auto; }
                         input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; }
                         button { background: #0277BD; color: white; border: none; padding: 12px; width: 100%; border-radius: 8px; font-weight: bold; cursor: pointer; }
@@ -86,7 +84,6 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                 </body>
                 </html>"""
             else:
-                # پنل اصلی مدیریت پلاک‌ها و سوییچ سرور
                 c = db_conn.cursor()
                 c.execute("SELECT id, max_plates, is_admin FROM panels WHERE username = ?", (username,))
                 panel_data = c.fetchone()
