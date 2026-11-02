@@ -41,7 +41,7 @@ jobs:
           PYTHONIOENCODING: utf-8
           PYTHONUTF8: 1
         run: |
-          flet build apk -v --project "barbarg_bandar" --product "Barbarg Bandar"
+          flet build apk -v
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
