@@ -2,13 +2,14 @@ import http.server
 import sqlite3
 import urllib.parse
 import http.cookies
+from engine import BarbargEngine
 
 PORT = 2727
+engine = BarbargEngine()
 
 def init_db():
     conn = sqlite3.connect("barbarg_bandar.db", check_same_thread=False)
     c = conn.cursor()
-    # جدول پنل‌ها (خریداران پنل / مشتریان)
     c.execute('''CREATE TABLE IF NOT EXISTS panels (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     username TEXT UNIQUE,
@@ -17,7 +18,6 @@ def init_db():
                     is_admin INTEGER DEFAULT 0,
                     is_active INTEGER DEFAULT 1
                 )''')
-    # جدول پلاک‌ها و رانندگان هر پنل
     c.execute('''CREATE TABLE IF NOT EXISTS drivers (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     panel_id INTEGER,
@@ -30,7 +30,7 @@ def init_db():
                     group_num INTEGER DEFAULT 1,
                     is_active INTEGER DEFAULT 1
                 )''')
-    # ثبت ادمین اصلی (DAVOOD)
+    # ثبت مدیر کل با مشخصات شما
     c.execute("INSERT OR IGNORE INTO panels (username, password, max_plates, is_admin, is_active) VALUES ('DAVOOD', 'Dp9498Dp', 1000, 1, 1)")
     conn.commit()
     return conn
@@ -64,7 +64,7 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                 <head>
                     <meta charset="UTF-8">
                     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <title>ورود - باربرگ بندر</title>
+                    <title>ورود - سامانه هوشمند باربرگ بندر</title>
                     <style>
                         body { font-family: Tahoma, sans-serif; background: #0277BD; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; direction: rtl; }
                         .login-card { background: white; padding: 25px; border-radius: 12px; width: 320px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); margin: auto; }
@@ -76,7 +76,7 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                 </head>
                 <body>
                     <div class="login-card">
-                        <h2>ورود به سامانه باربرگ</h2>
+                        <h2>ورود به سامانه هوشمند</h2>
                         <form method="POST" action="/login">
                             <input type="text" name="username" placeholder="نام کاربری" required>
                             <input type="password" name="password" placeholder="رمز عبور" required>
@@ -91,13 +91,18 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                 panel_data = c.fetchone()
                 
                 if not panel_data:
-                    self.wfile.write("خطای کاربری".encode("utf-8"))
+                    self.wfile.write("خطای دسترسی".encode("utf-8"))
                     return
 
                 panel_id, max_plates, is_admin = panel_data
 
+                # بررسی وضعیت هوشمند سرور از طریق engine
+                current_server_mode = engine.auto_switch_server()
+                server_display_name = "سرور اصلی سامانه درون‌شهری (پایدار)" if current_server_mode == "urban_main" else "سرور آنتن موبایل / هات‌اسپات (سوییچ خودکار هوشمند)"
+                server_badge_color = "#2E7D32" if current_server_mode == "urban_main" else "#E65100"
+
                 if is_admin == 1:
-                    # داشبورد ادمین کل (DAVOOD): مدیریت خریداران پنل
+                    # داشبورد مدیریت کل (DAVOOD)
                     c.execute("SELECT id, username, max_plates FROM panels WHERE is_admin = 0")
                     all_customers = c.fetchall()
 
@@ -110,7 +115,7 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                     <head>
                         <meta charset="UTF-8">
                         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                        <title>مدیریت کل - باربرگ بندر</title>
+                        <title>مدیریت کل هوشمند - باربرگ بندر</title>
                         <style>
                             body {{ font-family: Tahoma, sans-serif; background: #F2F5F8; margin: 0; padding: 0; direction: rtl; }}
                             .header {{ background: #0277BD; color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; }}
@@ -122,20 +127,25 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                             th, td {{ border: 1px solid #ddd; padding: 8px; text-align: center; }}
                             th {{ background: #f0f0f0; }}
                             .logout-btn {{ background: #D32F2F; width: auto; padding: 6px 12px; font-size: 12px; color: white; text-decoration: none; border-radius: 5px; }}
+                            .status-box {{ background: {server_badge_color}; color: white; padding: 10px; border-radius: 8px; text-align: center; font-size: 13px; margin-bottom: 15px; }}
                         </style>
                     </head>
                     <body>
                         <div class="header">
-                            <span>مدیر کل سامانه: {username}</span>
+                            <span>مدیر کل: {username}</span>
                             <a href="/logout" class="logout-btn">خروج</a>
                         </div>
                         <div class="container">
+                            <div class="status-box">
+                                <b>وضعیت هوشمند سرور:</b> {server_display_name}
+                            </div>
+
                             <div class="card">
-                                <h3>ساخت پنل جدید برای مشتری (خرید اشتراک / پک پلاک)</h3>
+                                <h3>ساخت پنل هوشمند برای مشتری جدید</h3>
                                 <form method="POST" action="/add_panel">
                                     <input type="text" name="new_user" placeholder="نام کاربری مشتری" required>
                                     <input type="text" name="new_pass" placeholder="رمز عبور مشتری" required>
-                                    <input type="number" name="max_plates" placeholder="سقف تعداد پلاک (مثلا 50 یا 100)" value="50" required>
+                                    <input type="number" name="max_plates" placeholder="سقف تعداد پلاک (پک اشتراک)" value="50" required>
                                     <button type="submit">ایجاد پنل جدید</button>
                                 </form>
                             </div>
@@ -151,7 +161,7 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                     </body>
                     </html>"""
                 else:
-                    # داشبورد خریدار پنل (کاربر عادی)
+                    # داشبورد خریدار پنل
                     c.execute("SELECT COUNT(*) FROM drivers WHERE panel_id = ?", (panel_id,))
                     current_plates_count = c.fetchone()[0]
 
@@ -167,7 +177,7 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                     <head>
                         <meta charset="UTF-8">
                         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                        <title>پنل اختصاصی - باربرگ بندر</title>
+                        <title>پنل هوشمند اختصاصی - باربرگ بندر</title>
                         <style>
                             body {{ font-family: Tahoma, sans-serif; background: #F2F5F8; margin: 0; padding: 0; direction: rtl; }}
                             .header {{ background: #0277BD; color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; }}
@@ -180,16 +190,21 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                             th, td {{ border: 1px solid #ddd; padding: 8px; text-align: center; }}
                             th {{ background: #f0f0f0; }}
                             .logout-btn {{ background: #D32F2F; width: auto; padding: 6px 12px; font-size: 12px; color: white; text-decoration: none; border-radius: 5px; }}
+                            .status-box {{ background: {server_badge_color}; color: white; padding: 10px; border-radius: 8px; text-align: center; font-size: 13px; margin-bottom: 15px; }}
                         </style>
                     </head>
                     <body>
                         <div class="header">
-                            <span>خوش آمدید، {username} (پلاک‌های ثبت‌شده: {current_plates_count} از {max_plates})</span>
+                            <span>کاربر: {username} (پلاک‌ها: {current_plates_count}/{max_plates})</span>
                             <a href="/logout" class="logout-btn">خروج</a>
                         </div>
                         <div class="container">
+                            <div class="status-box">
+                                <b>وضعیت سرور هوشمند:</b> {server_display_name}
+                            </div>
+
                             <div class="card">
-                                <h3>ثبت پلاک راننده جدید</h3>
+                                <h3>ثبت پلاک و راننده جدید</h3>
                                 <form method="POST" action="/add_driver">
                                     <input type="text" name="name" placeholder="نام و نام خانوادگی راننده" required>
                                     <input type="text" name="nid" placeholder="کد ملی" required>
@@ -204,14 +219,8 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                                         <option value="2">گروه ۲</option>
                                         <option value="3">گروه ۳</option>
                                     </select>
-                                    <button type="submit">ثبت پلاک در سامانه</button>
+                                    <button type="submit">ثبت و ارسال هوشمند پلاک</button>
                                 </form>
-                            </div>
-
-                            <div class="card">
-                                <h3>سوییچ سرور و وضعیت ربات</h3>
-                                <button style="background: #2E7D32; margin-bottom: 8px;" onclick="alert('عملیات روی سرور اصلی سامانه درون‌شهری آغاز شد.')">شروع عملیات (سرور سامانه)</button>
-                                <button style="background: #E65100;" onclick="alert('ارتباط روی سرور آنتن موبایل سوییچ شد!')">سوییچ به سرور آنتن موبایل (هات‌اسپات)</button>
                             </div>
 
                             <div class="card">
@@ -228,7 +237,6 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(html.encode("utf-8"))
 
         elif path.startswith("/delete_panel"):
-            # حذف پنل مشتری توسط ادمین کل
             query_components = urllib.parse.parse_qs(parsed_path.query)
             panel_id_to_del = query_components.get("id", [None])[0]
             if panel_id_to_del:
@@ -265,7 +273,6 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                 self.end_headers()
 
         elif self.path == "/add_panel":
-            # اضافه کردن پنل مشتری جدید توسط ادمین کل (DAVOOD)
             new_user = params.get('new_user', [''])[0]
             new_pass = params.get('new_pass', [''])[0]
             max_plates = params.get('max_plates', ['50'])[0]
@@ -306,6 +313,10 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                         iran = params.get('iran', [''])[0]
                         group_num = params.get('group_num', ['1'])[0]
 
+                        # استفاده از موتور هوشمند برای پردازش و ثبت پلاک
+                        plate_full = f"{p1} {let} {p2} - ایران {iran}"
+                        engine.register_plate_task(plate_full, group_num)
+
                         c.execute("INSERT INTO drivers (panel_id, name, national_id, plate_part1, plate_letter, plate_part2, plate_iran, group_num) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                                   (panel_id, name, nid, p1, let, p2, iran, group_num))
                         db_conn.commit()
@@ -317,7 +328,7 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
 def run():
     server_address = ('', PORT)
     httpd = http.server.HTTPServer(server_address, BarbargHandler)
-    print(f"سرور روی پورت {PORT} روشن شد...")
+    print(f"سرور هوشمند روی پورت {PORT} روشن شد...")
     httpd.serve_forever()
 
 if __name__ == '__main__':
