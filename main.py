@@ -2,6 +2,7 @@ import http.server
 import sqlite3
 import urllib.parse
 import http.cookies
+from datetime import datetime, timedelta
 from engine import BarbargEngine
 
 PORT = 2727
@@ -10,14 +11,17 @@ engine = BarbargEngine()
 def init_db():
     conn = sqlite3.connect("barbarg_bandar.db", check_same_thread=False)
     c = conn.cursor()
+    # جدول پنل‌ها همراه با تاریخ انقضا (۳۰ روزه)
     c.execute('''CREATE TABLE IF NOT EXISTS panels (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     username TEXT UNIQUE,
                     password TEXT,
                     max_plates INTEGER DEFAULT 50,
                     is_admin INTEGER DEFAULT 0,
-                    is_active INTEGER DEFAULT 1
+                    is_active INTEGER DEFAULT 1,
+                    expire_date TEXT
                 )''')
+    # جدول پلاک‌ها و رانندگان
     c.execute('''CREATE TABLE IF NOT EXISTS drivers (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     panel_id INTEGER,
@@ -30,8 +34,19 @@ def init_db():
                     group_num INTEGER DEFAULT 1,
                     is_active INTEGER DEFAULT 1
                 )''')
-    # ثبت مدیر کل با مشخصات شما
-    c.execute("INSERT OR IGNORE INTO panels (username, password, max_plates, is_admin, is_active) VALUES ('DAVOOD', 'Dp9498Dp', 1000, 1, 1)")
+    # جدول فیش‌های پرداختی مشتریان
+    c.execute('''CREATE TABLE IF NOT EXISTS receipts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    panel_id INTEGER,
+                    username TEXT,
+                    tracking_code TEXT,
+                    amount TEXT,
+                    status TEXT DEFAULT 'pending'
+                )''')
+    
+    # ثبت مدیر کل با تاریخ انقضای نامحدود (یا طولانی)
+    expire_admin = (datetime.now() + timedelta(days=365)).strftime('%Y-%m-%d')
+    c.execute("INSERT OR IGNORE INTO panels (username, password, max_plates, is_admin, is_active, expire_date) VALUES ('DAVOOD', 'Dp9498Dp', 1000, 1, 1, ?)", (expire_admin,))
     conn.commit()
     return conn
 
@@ -58,7 +73,6 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
             username = cookie.get('session').value if 'session' in cookie else None
 
             if not username:
-                # صفحه لاگین
                 html = """<!DOCTYPE html>
                 <html lang="fa" dir="rtl">
                 <head>
@@ -87,35 +101,54 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                 </html>"""
             else:
                 c = db_conn.cursor()
-                c.execute("SELECT id, max_plates, is_admin FROM panels WHERE username = ?", (username,))
+                c.execute("SELECT id, max_plates, is_admin, expire_date FROM panels WHERE username = ?", (username,))
                 panel_data = c.fetchone()
                 
                 if not panel_data:
                     self.wfile.write("خطای دسترسی".encode("utf-8"))
                     return
 
-                panel_id, max_plates, is_admin = panel_data
+                panel_id, max_plates, is_admin, expire_date_str = panel_data
 
-                # بررسی وضعیت هوشمند سرور از طریق engine
+                # محاسبه روزهای باقی‌مانده اعتبار
+                try:
+                    exp_date = datetime.strptime(expire_date_str, '%Y-%m-%d')
+                    days_left = (exp_date - datetime.now()).days
+                    if days_left < 0: days_left = 0
+                except:
+                    days_left = 30
+
                 current_server_mode = engine.auto_switch_server()
-                server_display_name = "سرور اصلی سامانه درون‌شهری (پایدار)" if current_server_mode == "urban_main" else "سرور آنتن موبایل / هات‌اسپات (سوییچ خودکار هوشمند)"
+                server_display_name = "سرور اصلی سامانه درون‌شهری (پایدار)" if current_server_mode == "urban_main" else "سرور آنتن موبایل / هات‌اسپات (سوییچ خودکار)"
                 server_badge_color = "#2E7D32" if current_server_mode == "urban_main" else "#E65100"
 
                 if is_admin == 1:
-                    # داشبورد مدیریت کل (DAVOOD)
-                    c.execute("SELECT id, username, max_plates FROM panels WHERE is_admin = 0")
+                    # داشبورد ادمین کل (DAVOOD)
+                    c.execute("SELECT id, username, max_plates, expire_date FROM panels WHERE is_admin = 0")
                     all_customers = c.fetchall()
 
                     customers_html = ""
                     for cust in all_customers:
-                        customers_html += f"<tr><td>{cust[1]}</td><td>{cust[2]} پلاک</td><td><a href='/delete_panel?id={cust[0]}' style='color:red;'>حذف</a></td></tr>"
+                        try:
+                            c_days = (datetime.strptime(cust[3], '%Y-%m-%d') - datetime.now()).days
+                            c_days = max(0, c_days)
+                        except:
+                            c_days = 0
+                        customers_html += f"<tr><td>{cust[1]}</td><td>{cust[2]} پلاک</td><td>{c_days} روز</td><td><a href='/renew_panel?id={cust[0]}' style='color:green; margin-left:10px;'>تمدید ۳۰ روزه</a><a href='/delete_panel?id={cust[0]}' style='color:red;'>حذف</a></td></tr>"
+
+                    # دریافت فیش‌های پرداختی در انتظار تایید
+                    c.execute("SELECT id, username, tracking_code, amount FROM receipts WHERE status = 'pending'")
+                    pending_receipts = c.fetchall()
+                    receipts_html = ""
+                    for rec in pending_receipts:
+                        receipts_html += f"<tr><td>{rec[1]}</td><td>کد پیگیری: {rec[2]} - مبلغ: {rec[3]}</td><td><a href='/approve_receipt?id={rec[0]}' style='color:green; font-weight:bold;'>تایید و تمدید</a></td></tr>"
 
                     html = f"""<!DOCTYPE html>
                     <html lang="fa" dir="rtl">
                     <head>
                         <meta charset="UTF-8">
                         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                        <title>مدیریت کل هوشمند - باربرگ بندر</title>
+                        <title>مدیریت کل - باربرگ بندر</title>
                         <style>
                             body {{ font-family: Tahoma, sans-serif; background: #F2F5F8; margin: 0; padding: 0; direction: rtl; }}
                             .header {{ background: #0277BD; color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; }}
@@ -137,24 +170,32 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                         </div>
                         <div class="container">
                             <div class="status-box">
-                                <b>وضعیت هوشمند سرور:</b> {server_display_name}
+                                <b>وضعیت سرور هوشمند:</b> {server_display_name}
                             </div>
 
                             <div class="card">
-                                <h3>ساخت پنل هوشمند برای مشتری جدید</h3>
+                                <h3>بررسی فیش‌های واریزی مشتریان</h3>
+                                <table>
+                                    <tr><th>نام کاربری</th><th>اطلاعات فیش</th><th>عملیات</th></tr>
+                                    {receipts_html if receipts_html else '<tr><td colspan="3">فیش در انتظاری وجود ندارد.</td></tr>'}
+                                </table>
+                            </div>
+
+                            <div class="card">
+                                <h3>ساخت پنل هوشمند جدید (اشتراک ۳۰ روزه)</h3>
                                 <form method="POST" action="/add_panel">
                                     <input type="text" name="new_user" placeholder="نام کاربری مشتری" required>
                                     <input type="text" name="new_pass" placeholder="رمز عبور مشتری" required>
-                                    <input type="number" name="max_plates" placeholder="سقف تعداد پلاک (پک اشتراک)" value="50" required>
-                                    <button type="submit">ایجاد پنل جدید</button>
+                                    <input type="number" name="max_plates" placeholder="سقف تعداد پلاک" value="50" required>
+                                    <button type="submit">ایجاد پنل</button>
                                 </form>
                             </div>
 
                             <div class="card">
-                                <h3>لیست مشتریان و خریداران پنل</h3>
+                                <h3>مدیریت مشتریان و اعتبار پنل‌ها</h3>
                                 <table>
-                                    <tr><th>نام کاربری</th><th>سقف پلاک</th><th>عملیات</th></tr>
-                                    {customers_html if customers_html else '<tr><td colspan="3">هنوز مشتری‌ای ثبت نشده است.</td></tr>'}
+                                    <tr><th>نام کاربری</th><th>سقف پلاک</th><th>اعتبار باقی‌مانده</th><th>عملیات</th></tr>
+                                    {customers_html if customers_html else '<tr><td colspan="4">مشتری‌ای ثبت نشده است.</td></tr>'}
                                 </table>
                             </div>
                         </div>
@@ -177,7 +218,7 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                     <head>
                         <meta charset="UTF-8">
                         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                        <title>پنل هوشمند اختصاصی - باربرگ بندر</title>
+                        <title>پنل اختصاصی - باربرگ بندر</title>
                         <style>
                             body {{ font-family: Tahoma, sans-serif; background: #F2F5F8; margin: 0; padding: 0; direction: rtl; }}
                             .header {{ background: #0277BD; color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; }}
@@ -191,27 +232,42 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                             th {{ background: #f0f0f0; }}
                             .logout-btn {{ background: #D32F2F; width: auto; padding: 6px 12px; font-size: 12px; color: white; text-decoration: none; border-radius: 5px; }}
                             .status-box {{ background: {server_badge_color}; color: white; padding: 10px; border-radius: 8px; text-align: center; font-size: 13px; margin-bottom: 15px; }}
+                            .card-box {{ background: #FFF9C4; border: 1px dashed #FBC02D; padding: 10px; border-radius: 8px; text-align: center; margin-bottom: 10px; font-weight: bold; }}
                         </style>
                     </head>
                     <body>
                         <div class="header">
-                            <span>کاربر: {username} (پلاک‌ها: {current_plates_count}/{max_plates})</span>
+                            <span>کاربر: {username} | اعتبار: {days_left} روز مانده</span>
                             <a href="/logout" class="logout-btn">خروج</a>
                         </div>
                         <div class="container">
                             <div class="status-box">
-                                <b>وضعیت سرور هوشمند:</b> {server_display_name}
+                                <b>وضعیت سرور:</b> {server_display_name}
                             </div>
 
                             <div class="card">
-                                <h3>ثبت پلاک و راننده جدید</h3>
+                                <h3>تمدید اشتراک و کارت به کارت</h3>
+                                <div class="card-box">
+                                    شماره کارت جهت واریز وجه ماهانه:<br>
+                                    <span style="font-size: 18px; color: #d32f2f;">۶۰۳۷-۹971-xxxx-xxxx</span><br>
+                                    <small>به نام: داود پاپراس</small>
+                                </div>
+                                <form method="POST" action="/submit_receipt">
+                                    <input type="text" name="tracking_code" placeholder="شماره پیگیری یا چهار رقم آخر کارت" required>
+                                    <input type="text" name="amount" placeholder="مبلغ واریزی (تومان)" required>
+                                    <button type="submit" style="background: #2E7D32;">ارسال فیش واریزی برای تمدید</button>
+                                </form>
+                            </div>
+
+                            <div class="card">
+                                <h3>ثبت پلاک راننده جدید ({current_plates_count}/{max_plates})</h3>
                                 <form method="POST" action="/add_driver">
                                     <input type="text" name="name" placeholder="نام و نام خانوادگی راننده" required>
                                     <input type="text" name="nid" placeholder="کد ملی" required>
                                     <div style="display: flex; gap: 5px;">
-                                        <input type="text" name="p2" placeholder="سه‌رقم (مثل ۴۴۸)" required>
+                                        <input type="text" name="p2" placeholder="سه‌رقم" required>
                                         <input type="text" name="let" value="ع" placeholder="حرف" required>
-                                        <input type="text" name="p1" placeholder="دورقم (مثل ۵۵)" required>
+                                        <input type="text" name="p1" placeholder="دورقم" required>
                                         <input type="text" name="iran" value="۸۴" placeholder="ایران" required>
                                     </div>
                                     <select name="group_num">
@@ -219,15 +275,15 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                                         <option value="2">گروه ۲</option>
                                         <option value="3">گروه ۳</option>
                                     </select>
-                                    <button type="submit">ثبت و ارسال هوشمند پلاک</button>
+                                    <button type="submit">ثبت و ارسال پلاک</button>
                                 </form>
                             </div>
 
                             <div class="card">
-                                <h3>لیست پلاک‌های ثبت‌شده شما</h3>
+                                <h3>لیست پلاک‌های شما</h3>
                                 <table>
-                                    <tr><th>نام راننده</th><th>کد ملی</th><th>پلاک</th><th>گروه</th></tr>
-                                    {drivers_html if drivers_html else '<tr><td colspan="4">هنوز پلاک ثبت نشده است.</td></tr>'}
+                                    <tr><th>راننده</th><th>کد ملی</th><th>پلاک</th><th>گروه</th></tr>
+                                    {drivers_html if drivers_html else '<tr><td colspan="4">پلاک ثبت نشده است.</td></tr>'}
                                 </table>
                             </div>
                         </div>
@@ -238,13 +294,59 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
 
         elif path.startswith("/delete_panel"):
             query_components = urllib.parse.parse_qs(parsed_path.query)
-            panel_id_to_del = query_components.get("id", [None])[0]
-            if panel_id_to_del:
+            p_id = query_components.get("id", [None])[0]
+            if p_id:
                 c = db_conn.cursor()
-                c.execute("DELETE FROM panels WHERE id = ? AND is_admin = 0", (panel_id_to_del,))
-                c.execute("DELETE FROM drivers WHERE panel_id = ?", (panel_id_to_del,))
+                c.execute("DELETE FROM panels WHERE id = ? AND is_admin = 0", (p_id,))
+                c.execute("DELETE FROM drivers WHERE panel_id = ?", (p_id,))
                 db_conn.commit()
-            
+            self.send_response(303)
+            self.send_header('Location', '/')
+            self.end_headers()
+
+        elif path.startswith("/renew_panel"):
+            # تمدید ۳۰ روزه دستی توسط ادمین
+            query_components = urllib.parse.parse_qs(parsed_path.query)
+            p_id = query_components.get("id", [None])[0]
+            if p_id:
+                c = db_conn.cursor()
+                c.execute("SELECT expire_date FROM panels WHERE id = ?", (p_id,))
+                row = c.fetchone()
+                if row:
+                    try:
+                        cur_exp = datetime.strptime(row[0], '%Y-%m-%d')
+                        base_date = max(cur_exp, datetime.now())
+                    except:
+                        base_date = datetime.now()
+                    new_exp = (base_date + timedelta(days=30)).strftime('%Y-%m-%d')
+                    c.execute("UPDATE panels SET expire_date = ? WHERE id = ?", (new_exp, p_id))
+                    db_conn.commit()
+            self.send_response(303)
+            self.send_header('Location', '/')
+            self.end_headers()
+
+        elif path.startswith("/approve_receipt"):
+            # تایید فیش توسط ادمین و افزودن ۳۰ روز به اعتبار کاربر
+            query_components = urllib.parse.parse_qs(parsed_path.query)
+            rec_id = query_components.get("id", [None])[0]
+            if rec_id:
+                c = db_conn.cursor()
+                c.execute("SELECT panel_id FROM receipts WHERE id = ?", (rec_id,))
+                r_data = c.fetchone()
+                if r_data:
+                    p_id = r_data[0]
+                    c.execute("SELECT expire_date FROM panels WHERE id = ?", (p_id,))
+                    p_data = c.fetchone()
+                    if p_data:
+                        try:
+                            cur_exp = datetime.strptime(p_data[0], '%Y-%m-%d')
+                            base_date = max(cur_exp, datetime.now())
+                        except:
+                            base_date = datetime.now()
+                        new_exp = (base_date + timedelta(days=30)).strftime('%Y-%m-%d')
+                        c.execute("UPDATE panels SET expire_date = ? WHERE id = ?", (new_exp, p_id))
+                    c.execute("UPDATE receipts SET status = 'approved' WHERE id = ?", (rec_id,))
+                    db_conn.commit()
             self.send_response(303)
             self.send_header('Location', '/')
             self.end_headers()
@@ -276,16 +378,35 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
             new_user = params.get('new_user', [''])[0]
             new_pass = params.get('new_pass', [''])[0]
             max_plates = params.get('max_plates', ['50'])[0]
+            expire_date = (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d')
 
             if new_user and new_pass:
                 try:
                     c = db_conn.cursor()
-                    c.execute("INSERT INTO panels (username, password, max_plates, is_admin, is_active) VALUES (?, ?, ?, 0, 1)", 
-                              (new_user, new_pass, int(max_plates)))
+                    c.execute("INSERT INTO panels (username, password, max_plates, is_admin, is_active, expire_date) VALUES (?, ?, ?, 0, 1, ?)", 
+                              (new_user, new_pass, int(max_plates), expire_date))
                     db_conn.commit()
                 except Exception as e:
-                    print("Error creating panel:", e)
+                    print("Error:", e)
 
+            self.send_response(303)
+            self.send_header('Location', '/')
+            self.end_headers()
+
+        elif self.path == "/submit_receipt":
+            cookie = http.cookies.SimpleCookie(self.headers.get('Cookie'))
+            username = cookie.get('session').value if 'session' in cookie else None
+            if username:
+                c = db_conn.cursor()
+                c.execute("SELECT id FROM panels WHERE username = ?", (username,))
+                p = c.fetchone()
+                if p:
+                    panel_id = p[0]
+                    tracking_code = params.get('tracking_code', [''])[0]
+                    amount = params.get('amount', [''])[0]
+                    c.execute("INSERT INTO receipts (panel_id, username, tracking_code, amount, status) VALUES (?, ?, ?, ?, 'pending')",
+                              (panel_id, username, tracking_code, amount))
+                    db_conn.commit()
             self.send_response(303)
             self.send_header('Location', '/')
             self.end_headers()
@@ -313,7 +434,6 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                         iran = params.get('iran', [''])[0]
                         group_num = params.get('group_num', ['1'])[0]
 
-                        # استفاده از موتور هوشمند برای پردازش و ثبت پلاک
                         plate_full = f"{p1} {let} {p2} - ایران {iran}"
                         engine.register_plate_task(plate_full, group_num)
 
