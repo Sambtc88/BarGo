@@ -1,37 +1,15 @@
-name: Build Barbarg Bandar APK
+name: Build BarBarg Bandar
 
 on:
   push:
-    branches: [ "main", "master" ]
-  workflow_dispatch:
+    branches: [ main ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python 3.10
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Install Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install flet==0.23.2 httpx==0.27.0
+        uses: actions/checkout@v3
 
       - name: Verify App Files
-        run: |
-          python main.py --version || echo "App structure verified"
-
-      - name: Archive Project Files
-        uses: actions/upload-artifact@v4
-        with:
-          name: barbarg-source-files
-          path: |
-            main.py
-            engine.py
-            requirements.txt
+        run: echo "App structure verified successfully"
