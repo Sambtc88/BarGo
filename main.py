@@ -11,7 +11,6 @@ engine = BarbargEngine()
 def init_db():
     conn = sqlite3.connect("barbarg_bandar.db", check_same_thread=False)
     c = conn.cursor()
-    # جدول پنل‌ها همراه با تاریخ انقضا (۳۰ روزه)
     c.execute('''CREATE TABLE IF NOT EXISTS panels (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     username TEXT UNIQUE,
@@ -21,7 +20,6 @@ def init_db():
                     is_active INTEGER DEFAULT 1,
                     expire_date TEXT
                 )''')
-    # جدول پلاک‌ها و رانندگان
     c.execute('''CREATE TABLE IF NOT EXISTS drivers (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     panel_id INTEGER,
@@ -34,7 +32,6 @@ def init_db():
                     group_num INTEGER DEFAULT 1,
                     is_active INTEGER DEFAULT 1
                 )''')
-    # جدول فیش‌های پرداختی مشتریان
     c.execute('''CREATE TABLE IF NOT EXISTS receipts (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     panel_id INTEGER,
@@ -44,7 +41,6 @@ def init_db():
                     status TEXT DEFAULT 'pending'
                 )''')
     
-    # ثبت مدیر کل با تاریخ انقضای نامحدود (یا طولانی)
     expire_admin = (datetime.now() + timedelta(days=365)).strftime('%Y-%m-%d')
     c.execute("INSERT OR IGNORE INTO panels (username, password, max_plates, is_admin, is_active, expire_date) VALUES ('DAVOOD', 'Dp9498Dp', 1000, 1, 1, ?)", (expire_admin,))
     conn.commit()
@@ -110,7 +106,6 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
 
                 panel_id, max_plates, is_admin, expire_date_str = panel_data
 
-                # محاسبه روزهای باقی‌مانده اعتبار
                 try:
                     exp_date = datetime.strptime(expire_date_str, '%Y-%m-%d')
                     days_left = (exp_date - datetime.now()).days
@@ -123,7 +118,6 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                 server_badge_color = "#2E7D32" if current_server_mode == "urban_main" else "#E65100"
 
                 if is_admin == 1:
-                    # داشبورد ادمین کل (DAVOOD)
                     c.execute("SELECT id, username, max_plates, expire_date FROM panels WHERE is_admin = 0")
                     all_customers = c.fetchall()
 
@@ -136,7 +130,6 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                             c_days = 0
                         customers_html += f"<tr><td>{cust[1]}</td><td>{cust[2]} پلاک</td><td>{c_days} روز</td><td><a href='/renew_panel?id={cust[0]}' style='color:green; margin-left:10px;'>تمدید ۳۰ روزه</a><a href='/delete_panel?id={cust[0]}' style='color:red;'>حذف</a></td></tr>"
 
-                    # دریافت فیش‌های پرداختی در انتظار تایید
                     c.execute("SELECT id, username, tracking_code, amount FROM receipts WHERE status = 'pending'")
                     pending_receipts = c.fetchall()
                     receipts_html = ""
@@ -170,7 +163,7 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                         </div>
                         <div class="container">
                             <div class="status-box">
-                                <b>وضعیت سرور هوشمند:</b> {server_display_name}
+                                <b>وضعیت هوشمند سرور:</b> {server_display_name}
                             </div>
 
                             <div class="card">
@@ -202,7 +195,6 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                     </body>
                     </html>"""
                 else:
-                    # داشبورد خریدار پنل
                     c.execute("SELECT COUNT(*) FROM drivers WHERE panel_id = ?", (panel_id,))
                     current_plates_count = c.fetchone()[0]
 
@@ -232,7 +224,8 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                             th {{ background: #f0f0f0; }}
                             .logout-btn {{ background: #D32F2F; width: auto; padding: 6px 12px; font-size: 12px; color: white; text-decoration: none; border-radius: 5px; }}
                             .status-box {{ background: {server_badge_color}; color: white; padding: 10px; border-radius: 8px; text-align: center; font-size: 13px; margin-bottom: 15px; }}
-                            .card-box {{ background: #FFF9C4; border: 1px dashed #FBC02D; padding: 10px; border-radius: 8px; text-align: center; margin-bottom: 10px; font-weight: bold; }}
+                            .card-box {{ background: #263238; color: #FFF; padding: 15px; border-radius: 10px; text-align: center; margin-bottom: 15px; font-weight: bold; }}
+                            .card-box img {{ max-width: 100%; height: auto; border-radius: 8px; margin-top: 10px; }}
                         </style>
                     </head>
                     <body>
@@ -246,15 +239,19 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                             </div>
 
                             <div class="card">
-                                <h3>تمدید اشتراک و کارت به کارت</h3>
+                                <h3>تمدید اشتراک و اطلاعات واریز</h3>
                                 <div class="card-box">
-                                    شماره کارت جهت واریز وجه ماهانه:<br>
-                                    <span style="font-size: 18px; color: #d32f2f;">۶۰۳۷-۹971-xxxx-xxxx</span><br>
-                                    <small>به نام: داود پاپراس</small>
+                                    <div style="font-size: 14px; color: #CFD8DC; margin-bottom: 5px;">شماره کارت:</div>
+                                    <div style="font-size: 18px; color: #4FC3F7; direction: ltr; margin-bottom: 10px;">6219 8619 8658 9132</div>
+                                    <div style="font-size: 14px; color: #CFD8DC; margin-bottom: 5px;">شماره شبا:</div>
+                                    <div style="font-size: 13px; color: #81C784; direction: ltr; word-break: break-all;">IR530560611828005783056501</div>
+                                    
+                                    <!-- نمایش تصویر کارت ارسال شده توسط شما -->
+                                    <img src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/4QBaRXhpZgAATU0AKgAAAAgABAEaAAUAAAABAAAAPgEbAAUAAAABAAAARgEoAAMAAAABAAIAAAExAAIAAAARAAAATgAAAAAAAABIAAAAAQAAAEgAAAABPHN1cmVjaXRodcDAAQAcEAAIAAAAAQAAAA==" alt="اطلاعات کارت">
                                 </div>
                                 <form method="POST" action="/submit_receipt">
                                     <input type="text" name="tracking_code" placeholder="شماره پیگیری یا چهار رقم آخر کارت" required>
-                                    <input type="text" name="amount" placeholder="مبلغ واریزی (تومان)" required>
+                                    <input type="number" name="amount" placeholder="مبلغ واریزی (تومان)" required>
                                     <button type="submit" style="background: #2E7D32;">ارسال فیش واریزی برای تمدید</button>
                                 </form>
                             </div>
@@ -305,7 +302,6 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
 
         elif path.startswith("/renew_panel"):
-            # تمدید ۳۰ روزه دستی توسط ادمین
             query_components = urllib.parse.parse_qs(parsed_path.query)
             p_id = query_components.get("id", [None])[0]
             if p_id:
@@ -326,7 +322,6 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
 
         elif path.startswith("/approve_receipt"):
-            # تایید فیش توسط ادمین و افزودن ۳۰ روز به اعتبار کاربر
             query_components = urllib.parse.parse_qs(parsed_path.query)
             rec_id = query_components.get("id", [None])[0]
             if rec_id:
