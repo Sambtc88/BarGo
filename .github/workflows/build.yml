@@ -16,19 +16,23 @@ jobs:
         with:
           python-version: "3.10"
 
-      - name: Install Dependencies
+      - name: Install Flet and Dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y git zip unzip openjdk-17-jdk autoconf libtool pkg-config zlib1g-dev libffi-dev libssl-dev libncursesw6 libstdc++6 zlib1g libbz2-dev libsqlite3-dev
           python -m pip install --upgrade pip
-          pip install --upgrade buildozer cython==0.29.36 flet
+          pip install flet httpx
 
-      - name: Run Buildozer
+      - name: Build APK with Flet
         run: |
-          buildozer -v android debug
+          flet pack main.py --android
+
+      - name: Find and Move APK
+        run: |
+          mkdir -p output_apk
+          find . -name "*.apk" -exec cp {} output_apk/ \;
+          ls -la output_apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: BarGo-App
-          path: bin/*.apk
+          name: BarGo-App-New
+          path: output_apk/*.apk
