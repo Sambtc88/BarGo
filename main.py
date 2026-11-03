@@ -21,7 +21,6 @@ def init_db():
                     is_active INTEGER DEFAULT 1,
                     expire_date TEXT
                 )''')
-    # جدول مدیریت سرورهای چندگانه (مشابه سیستم سرورهای سناتور)
     c.execute('''CREATE TABLE IF NOT EXISTS servers (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     ip_name TEXT,
@@ -56,7 +55,6 @@ def init_db():
     expire_admin = (datetime.now() + timedelta(days=365)).strftime('%Y-%m-%d')
     c.execute("INSERT OR IGNORE INTO panels (username, password, max_plates, is_admin, is_active, expire_date) VALUES ('DAVOOD', 'Dp9498Dp', 1000, 1, 1, ?)", (expire_admin,))
     
-    # ثبت پیش‌فرض ۳ سرور اولیه
     c.execute("INSERT OR IGNORE INTO servers (ip_name, group_assigned, status) VALUES ('IP 001', 'آماده انتخاب', 'active')")
     c.execute("INSERT OR IGNORE INTO servers (ip_name, group_assigned, status) VALUES ('IP 003', 'گروه ۲', 'busy')")
     c.execute("INSERT OR IGNORE INTO servers (ip_name, group_assigned, status) VALUES ('IP 391', 'گروه ۱', 'active')")
@@ -93,30 +91,83 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
             username = cookie.get('session').value if 'session' in cookie else None
 
             if not username:
+                # صفحه لاگین اختصاصی با دیزاین شبیه سناتور، رنگ‌بندی جذاب، تصویر کامیونت و متن کامل
                 html = """<!DOCTYPE html>
                 <html lang="fa" dir="rtl">
                 <head>
                     <meta charset="UTF-8">
                     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <title>ورود - سامانه هوشمند باربرگ بندر</title>
+                    <title>ورود - سامانه هوشمند بارگوبندر</title>
                     <style>
-                        body { font-family: Tahoma, sans-serif; background: linear-gradient(135deg, #0277BD, #01579B); margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; direction: rtl; }
-                        .login-card { background: white; padding: 35px; border-radius: 20px; width: 350px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); text-align: center; }
-                        input { width: 100%; padding: 14px; margin: 12px 0; border: 1px solid #ddd; border-radius: 12px; box-sizing: border-box; font-size: 14px; outline: none; background: #FAFAFA; }
-                        input:focus { border-color: #0277BD; background: #fff; box-shadow: 0 0 8px rgba(2,119,189,0.2); }
-                        button { background: #0277BD; color: white; border: none; padding: 14px; width: 100%; border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 16px; margin-top: 15px; transition: 0.3s; }
-                        button:hover { background: #01579B; transform: translateY(-2px); }
-                        h2 { color: #0277BD; margin-bottom: 25px; font-size: 24px; font-weight: bold; }
+                        body { font-family: Tahoma, Arial, sans-serif; background: linear-gradient(135deg, #0B132B 0%, #1C2541 50%, #28385E 100%); margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; direction: rtl; }
+                        .login-container { width: 100%; max-width: 400px; padding: 20px; box-sizing: border-box; text-align: center; }
+                        
+                        /* باکس لوگو و کامیونت */
+                        .logo-box { margin-bottom: 20px; }
+                        .truck-icon { width: 90px; height: 65px; background: linear-gradient(135deg, #00B4D8, #0077B6); border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 10px 25px rgba(0,180,216,0.4); margin-bottom: 12px; }
+                        .truck-icon svg { width: 50px; height: 50px; fill: #ffffff; }
+                        .brand-en { font-size: 26px; font-weight: 800; letter-spacing: 1px; color: #00B4D8; margin: 0; text-transform: uppercase; }
+                        .brand-fa { font-size: 20px; font-weight: bold; color: #F1F5F9; margin-top: 5px; margin-bottom: 25px; }
+
+                        /* فرم ورود مشابه سناتور ولی شیک‌تر */
+                        .form-card { background: rgba(255, 255, 255, 0.98); padding: 30px 25px; border-radius: 20px; box-shadow: 0 15px 35px rgba(0,0,0,0.3); text-align: right; }
+                        .form-group { margin-bottom: 15px; }
+                        .form-group label { display: block; font-size: 13px; color: #334155; margin-bottom: 6px; font-weight: bold; }
+                        input[type="text"], input[type="password"] { width: 100%; padding: 14px; background: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 12px; box-sizing: border-box; color: #1E293B; font-size: 15px; outline: none; transition: 0.3s; }
+                        input:focus { border-color: #00B4D8; background: #fff; box-shadow: 0 0 8px rgba(0,180,216,0.2); }
+                        
+                        .captcha-box { background: #F8FAFC; border: 1px solid #CBD5E1; padding: 12px; border-radius: 12px; display: flex; align-items: center; justify-content: space-between; margin: 15px 0; font-size: 13px; color: #475569; }
+                        .rules-box { display: flex; align-items: center; gap: 8px; margin: 15px 0; font-size: 13px; color: #334155; }
+                        .rules-box a { color: #E53E3E; text-decoration: none; font-weight: bold; }
+
+                        .btn-submit { background: linear-gradient(135deg, #00B4D8, #0077B6); color: white; border: none; padding: 15px; width: 100%; border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 16px; box-shadow: 0 8px 20px rgba(0,180,216,0.4); transition: 0.3s; }
+                        .btn-submit:hover { opacity: 0.95; transform: translateY(-2px); }
+
+                        .footer-text { margin-top: 25px; font-size: 12px; color: #94A3B8; text-align: center; line-height: 1.6; }
                     </style>
                 </head>
                 <body>
-                    <div class="login-card">
-                        <h2>باربرگ بندر</h2>
-                        <form method="POST" action="/login">
-                            <input type="text" name="username" placeholder="نام کاربری" required>
-                            <input type="password" name="password" placeholder="رمز عبور" required>
-                            <button type="submit">ورود به پنل حرفه‌ای</button>
-                        </form>
+                    <div class="login-container">
+                        <div class="logo-box">
+                            <!-- آیکون اختصاصی کامیونت باربرگ -->
+                            <div class="truck-icon">
+                                <svg viewBox="0 0 24 24"><path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zm-1.5 9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
+                            </div>
+                            <div class="brand-en">Bargo Bandar</div>
+                            <div class="brand-fa">بارگوبندر</div>
+                        </div>
+
+                        <div class="form-card">
+                            <form method="POST" action="/login">
+                                <div class="form-group">
+                                    <label>نام کاربری</label>
+                                    <input type="text" name="username" placeholder="نام کاربری" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>کلمه عبور</label>
+                                    <input type="password" name="password" placeholder="کلمه عبور" required>
+                                </div>
+
+                                <div class="captcha-box">
+                                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                                        <input type="checkbox" style="width:20px; height:20px; accent-color:#00B4D8;" required>
+                                        <span>من ربات نیستم</span>
+                                    </label>
+                                    <span style="color:#0284C7; font-size:12px; font-weight:bold;">امن 🛡️</span>
+                                </div>
+
+                                <div class="rules-box">
+                                    <input type="checkbox" style="width:18px; height:18px; accent-color:#00B4D8;" required>
+                                    <span><a href="#">قوانین</a> را مطالعه و قبول دارم</span>
+                                </div>
+
+                                <button type="submit" class="btn-submit">ورود</button>
+                            </form>
+                        </div>
+
+                        <div class="footer-text">
+                            سامانه مدیریت پیشرفته باربرگ و ناوگان درون‌شهری
+                        </div>
                     </div>
                 </body>
                 </html>"""
@@ -157,7 +208,6 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                     for rec in pending_receipts:
                         receipts_html += f"<tr><td>{rec[1]}</td><td>کد: {rec[2]} - {rec[3]} ریال</td><td><a href='/approve_receipt?id={rec[0]}' style='color:green; font-weight:bold;'>تایید</a></td></tr>"
 
-                    # دریافت سرورها برای مدیریت ادمین
                     c.execute("SELECT id, ip_name, group_assigned, status FROM servers")
                     all_servers = c.fetchall()
                     servers_html = ""
@@ -248,7 +298,6 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                             </td>
                         </tr>"""
 
-                    # دریافت سرورها برای نمایش در پنل کاربر
                     c.execute("SELECT ip_name, group_assigned, status FROM servers")
                     user_servers = c.fetchall()
                     srv_grid = ""
