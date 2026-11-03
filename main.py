@@ -12,7 +12,7 @@ def main(page: ft.Page):
   )
 
   def button_clicked(e):
-    t.value = "دکمه فشاره شد - سیستم فعال است"
+    t.value = "دکمه فشرده شد - سیستم فعال است"
     page.update()
 
   b = ft.ElevatedButton(text="تست کلیک", on_click=button_clicked)
@@ -27,5 +27,4 @@ def main(page: ft.Page):
   )
 
 
-if __name__ == "__main__":
-  ft.app(target=main)
+    ft.app(target=main)
