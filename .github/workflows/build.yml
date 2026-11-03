@@ -18,13 +18,22 @@ jobs:
 
       - name: Install System Dependencies
         run: |
+          sudo dpkg --add-architecture i386
           sudo apt-get update
-          sudo apt-get install -y git zip unzip openjdk-17-jdk autoconf libtool pkg-config zlib1g-dev libffi-dev libssl-dev
+          sudo apt-get install -y git zip unzip openjdk-17-jdk autoconf libtool pkg-config zlib1g-dev libffi-dev libssl-dev libncurses5 libstdc++6 zlib1g libbz2-dev libsqlite3-dev
 
       - name: Install Flet and Buildozer
         run: |
           python -m pip install --upgrade pip
           pip install flet buildozer cython==0.29.36
+
+      - name: Create flet.yaml if not exists
+        run: |
+          if [ ! -f "flet.yaml" ]; then
+            echo "name: bar_go" > flet.yaml
+            echo "product_name: BarGo" >> flet.yaml
+            echo "org: com.bargor.app" >> flet.yaml
+          fi
 
       - name: Build APK with Flet
         run: |
