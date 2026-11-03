@@ -28,14 +28,17 @@ jobs:
 
       - name: Build APK with Flet
         run: |
-          # ارسال خودکار پاسخ y به درخواست‌های نصب فلاتر و اندروید SDK
+          # اجرای کامل ساخت اپلیکیشن اندروید با پاسخ خودکار
           echo "y" | flet build apk -v
+
+      - name: Find and Move APK
+        run: |
+          mkdir -p output_apk
+          find . -name "*.apk" -exec cp {} output_apk/ \;
+          ls -la output_apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: BarGo-App
-          path: |
-            bin/*.apk
-            build/apk/*.apk
-            dist/*.apk
+          path: output_apk/*.apk
