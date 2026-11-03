@@ -16,24 +16,35 @@ jobs:
         with:
           python-version: "3.10"
 
-      - name: Install System Dependencies
+      - name: Install Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y git zip unzip openjdk-17-jdk autoconf libtool pkg-config zlib1g-dev libffi-dev libssl-dev libncursesw6 libstdc++6 zlib1g libbz2-dev libsqlite3-dev
-
-      - name: Install Flet and Dependencies
-        run: |
           python -m pip install --upgrade pip
-          pip install flet httpx
+          pip install --upgrade buildozer cython==0.29.36 flet httpx
 
-      - name: Build APK with Flet
+      - name: Initialize and Build with Buildozer Directly
         run: |
-          echo "y" | flet build apk -v
+          # اگر فایل buildozer.spec وجود ندارد، مقداردهی اولیه کن
+          if [ ! -f "buildozer.spec" ]; then
+            buildozer init
+          fi
+          # اصلاح اجباری پارامترهای حیاتی در بیلدوز برای جلوگیری از خطا
+          sed -i 's/#充满/package.name = bargo/g' buildozer.spec || true
+          sed -i 's/package.name = .*/package.name = bargo/g' buildozer.spec
+          sed -i 's/package.domain = .*/package.domain = com.bargor.app/g' buildozer.spec
+          sed -i 's/source.include_exts = .*/source.include_exts = py,png,jpg,kv,atlas/g' buildozer.spec
+          sed -i 's/requirements = .*/requirements = python3,flet,httpx/g' buildozer.spec
+          sed -i 's/#android.accept_sdk_license = False/android.accept_sdk_license = True/g' buildozer.spec
+          sed -i 's/android.accept_sdk_license = .*/android.accept_sdk_license = True/g' buildozer.spec
+
+          # اجرای بیلدوز
+          buildozer -v android debug
 
       - name: Find and Move APK
         run: |
           mkdir -p output_apk
-          find . -name "*.apk" -exec cp {} output_apk/ \;
+          find bin/ -name "*.apk" -exec cp {} output_apk/ \;
           ls -la output_apk
 
       - name: Upload APK Artifact
