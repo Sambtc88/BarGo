@@ -21,7 +21,13 @@ def init_db():
                     is_active INTEGER DEFAULT 1,
                     expire_date TEXT
                 )''')
-    # جدول پیشرفته رانندگان همراه با وضعیت صدور و حمل هوشمند
+    # جدول مدیریت سرورهای چندگانه (مشابه سیستم سرورهای سناتور)
+    c.execute('''CREATE TABLE IF NOT EXISTS servers (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ip_name TEXT,
+                    group_assigned TEXT,
+                    status TEXT DEFAULT 'active'
+                )''')
     c.execute('''CREATE TABLE IF NOT EXISTS drivers (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     panel_id INTEGER,
@@ -49,6 +55,12 @@ def init_db():
     
     expire_admin = (datetime.now() + timedelta(days=365)).strftime('%Y-%m-%d')
     c.execute("INSERT OR IGNORE INTO panels (username, password, max_plates, is_admin, is_active, expire_date) VALUES ('DAVOOD', 'Dp9498Dp', 1000, 1, 1, ?)", (expire_admin,))
+    
+    # ثبت پیش‌فرض ۳ سرور اولیه
+    c.execute("INSERT OR IGNORE INTO servers (ip_name, group_assigned, status) VALUES ('IP 001', 'آماده انتخاب', 'active')")
+    c.execute("INSERT OR IGNORE INTO servers (ip_name, group_assigned, status) VALUES ('IP 003', 'گروه ۲', 'busy')")
+    c.execute("INSERT OR IGNORE INTO servers (ip_name, group_assigned, status) VALUES ('IP 391', 'گروه ۱', 'active')")
+    
     conn.commit()
     return conn
 
@@ -89,21 +101,21 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                     <title>ورود - سامانه هوشمند باربرگ بندر</title>
                     <style>
                         body { font-family: Tahoma, sans-serif; background: linear-gradient(135deg, #0277BD, #01579B); margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; direction: rtl; }
-                        .login-card { background: white; padding: 30px; border-radius: 16px; width: 340px; box-shadow: 0 8px 25px rgba(0,0,0,0.3); text-align: center; }
-                        input { width: 100%; padding: 14px; margin: 10px 0; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; font-size: 14px; outline: none; }
-                        input:focus { border-color: #0277BD; box-shadow: 0 0 5px rgba(2,119,189,0.3); }
-                        button { background: #0277BD; color: white; border: none; padding: 14px; width: 100%; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 15px; margin-top: 10px; }
-                        button:hover { background: #01579B; }
-                        h2 { color: #0277BD; margin-bottom: 25px; font-size: 22px; }
+                        .login-card { background: white; padding: 35px; border-radius: 20px; width: 350px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); text-align: center; }
+                        input { width: 100%; padding: 14px; margin: 12px 0; border: 1px solid #ddd; border-radius: 12px; box-sizing: border-box; font-size: 14px; outline: none; background: #FAFAFA; }
+                        input:focus { border-color: #0277BD; background: #fff; box-shadow: 0 0 8px rgba(2,119,189,0.2); }
+                        button { background: #0277BD; color: white; border: none; padding: 14px; width: 100%; border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 16px; margin-top: 15px; transition: 0.3s; }
+                        button:hover { background: #01579B; transform: translateY(-2px); }
+                        h2 { color: #0277BD; margin-bottom: 25px; font-size: 24px; font-weight: bold; }
                     </style>
                 </head>
                 <body>
                     <div class="login-card">
-                        <h2>سامانه هوشمند باربرگ بندر</h2>
+                        <h2>باربرگ بندر</h2>
                         <form method="POST" action="/login">
-                            <input type="text" name="username" placeholder="نام کاربری امن" required>
+                            <input type="text" name="username" placeholder="نام کاربری" required>
                             <input type="password" name="password" placeholder="رمز عبور" required>
-                            <button type="submit">ورود به پنل پیشرفته</button>
+                            <button type="submit">ورود به پنل حرفه‌ای</button>
                         </form>
                     </div>
                 </body>
@@ -137,13 +149,21 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                             c_days = max(0, (datetime.strptime(cust[3], '%Y-%m-%d') - datetime.now()).days)
                         except:
                             c_days = 0
-                        customers_html += f"<tr><td>{cust[1]}</td><td>{cust[2]} پلاک</td><td>{c_days} روز</td><td><a href='/renew_panel?id={cust[0]}' style='color:green; margin-left:10px;'>تمدید ۳۰ روزه</a><a href='/delete_panel?id={cust[0]}' style='color:red;'>حذف</a></td></tr>"
+                        customers_html += f"<tr><td>{cust[1]}</td><td>{cust[2]} پلاک</td><td>{c_days} روز</td><td><a href='/renew_panel?id={cust[0]}' style='color:green; margin-left:10px; font-weight:bold;'>تمدید</a> <a href='/delete_panel?id={cust[0]}' style='color:red; font-weight:bold;'>حذف</a></td></tr>"
 
                     c.execute("SELECT id, username, tracking_code, amount FROM receipts WHERE status = 'pending'")
                     pending_receipts = c.fetchall()
                     receipts_html = ""
                     for rec in pending_receipts:
-                        receipts_html += f"<tr><td>{rec[1]}</td><td>کد: {rec[2]} - مبلغ: {rec[3]} ریال</td><td><a href='/approve_receipt?id={rec[0]}' style='color:green; font-weight:bold;'>تایید و تمدید</a></td></tr>"
+                        receipts_html += f"<tr><td>{rec[1]}</td><td>کد: {rec[2]} - {rec[3]} ریال</td><td><a href='/approve_receipt?id={rec[0]}' style='color:green; font-weight:bold;'>تایید</a></td></tr>"
+
+                    # دریافت سرورها برای مدیریت ادمین
+                    c.execute("SELECT id, ip_name, group_assigned, status FROM servers")
+                    all_servers = c.fetchall()
+                    servers_html = ""
+                    for s in all_servers:
+                        s_col = "#2E7D32" if s[3] == "active" else "#C62828"
+                        servers_html += f"<div style='background:#f9f9f9; border:1px solid #ddd; padding:10px; border-radius:8px; margin:5px 0; display:flex; justify-content:space-between; align-items:center;'><span><b>{s[1]}</b> ({s[2]})</span><span style='color:{s_col}; font-weight:bold;'>{'فعال' if s[3]=='active' else 'اشغال'}</span></div>"
 
                     html = f"""<!DOCTYPE html>
                     <html lang="fa" dir="rtl">
@@ -152,17 +172,17 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                         <meta name="viewport" content="width=device-width, initial-scale=1.0">
                         <title>مدیریت کل - باربرگ بندر</title>
                         <style>
-                            body {{ font-family: Tahoma, sans-serif; background: #F4F6F9; margin: 0; padding: 0; direction: rtl; }}
-                            .header {{ background: #0277BD; color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }}
-                            .container {{ padding: 20px; max-width: 650px; margin: auto; }}
-                            .card {{ background: white; padding: 20px; border-radius: 14px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); margin-bottom: 20px; }}
-                            input {{ width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }}
-                            button {{ background: #2E7D32; color: white; border: none; padding: 12px; width: 100%; border-radius: 8px; font-weight: bold; cursor: pointer; }}
+                            body {{ font-family: Tahoma, sans-serif; background: #EDF2F7; margin: 0; padding: 0; direction: rtl; }}
+                            .header {{ background: #0277BD; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+                            .container {{ padding: 20px; max-width: 700px; margin: auto; }}
+                            .card {{ background: white; padding: 22px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px; }}
+                            input {{ width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; }}
+                            button {{ background: #2E7D32; color: white; border: none; padding: 12px; width: 100%; border-radius: 10px; font-weight: bold; cursor: pointer; }}
                             table {{ width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }}
-                            th, td {{ border: 1px solid #eee; padding: 10px; text-align: center; }}
-                            th {{ background: #FAFAFA; color: #333; }}
-                            .logout-btn {{ background: #D32F2F; padding: 6px 14px; font-size: 12px; color: white; text-decoration: none; border-radius: 6px; }}
-                            .status-box {{ background: {server_badge_color}; color: white; padding: 12px; border-radius: 10px; text-align: center; font-size: 14px; margin-bottom: 20px; font-weight: bold; }}
+                            th, td {{ border: 1px solid #edf2f7; padding: 10px; text-align: center; }}
+                            th {{ background: #F7FAFC; color: #4A5568; }}
+                            .logout-btn {{ background: #E53E3E; padding: 8px 16px; font-size: 13px; color: white; text-decoration: none; border-radius: 8px; }}
+                            .status-box {{ background: {server_badge_color}; color: white; padding: 14px; border-radius: 12px; text-align: center; font-size: 14px; margin-bottom: 20px; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }}
                         </style>
                     </head>
                     <body>
@@ -175,7 +195,11 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                                 وضعیت هوشمند سرور: {server_display_name}
                             </div>
                             <div class="card">
-                                <h3>بررسی فیش‌های واریزی مشتریان</h3>
+                                <h3>مدیریت و تزریق سرورها (۳ سرور فعال)</h3>
+                                {servers_html}
+                            </div>
+                            <div class="card">
+                                <h3>فیش‌های واریزی در انتظار تایید</h3>
                                 <table>
                                     <tr><th>کاربر</th><th>جزئیات</th><th>عملیات</th></tr>
                                     {receipts_html if receipts_html else '<tr><td colspan="3">فیش در انتظاری وجود ندارد.</td></tr>'}
@@ -187,11 +211,11 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                                     <input type="text" name="new_user" placeholder="نام کاربری مشتری" required>
                                     <input type="text" name="new_pass" placeholder="رمز عبور مشتری" required>
                                     <input type="number" name="max_plates" placeholder="سقف تعداد پلاک" value="50" required>
-                                    <button type="submit">ایجاد پنل جدید</button>
+                                    <button type="submit">ایجاد پنل تجاری</button>
                                 </form>
                             </div>
                             <div class="card">
-                                <h3>مدیریت مشتریان و اعتبار اشتراک</h3>
+                                <h3>مدیریت مشتریان و اعتبار</h3>
                                 <table>
                                     <tr><th>کاربر</th><th>سقف پلاک</th><th>اعتبار</th><th>عملیات</th></tr>
                                     {customers_html if customers_html else '<tr><td colspan="4">مشتری‌ای ثبت نشده است.</td></tr>'}
@@ -215,35 +239,42 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                         trn_col = "#2E7D32" if d[10] == 1 else "#C62828"
 
                         drivers_html += f"""<tr>
-                            <td>{d[1]}<br><small>{d[2]}</small></td>
-                            <td><b>{d[3]} {d[4]} {d[5]} - {d[6]}</b></td>
+                            <td><b>{d[1]}</b><br><small>{d[2]}</small></td>
+                            <td><span style="background:#E3F2FD; padding:4px 8px; border-radius:6px; font-weight:bold;">{d[3]} {d[4]} {d[5]} - {d[6]}</span></td>
                             <td>{d[7]} ({d[8]} ت)</td>
                             <td>
-                                <a href='/toggle_issue?id={d[0]}' style='color:white; background:{iss_col}; padding:5px 8px; border-radius:5px; text-decoration:none; font-size:11px; display:inline-block; margin-bottom:3px;'>{iss_txt}</a><br>
-                                <a href='/toggle_transport?id={d[0]}' style='color:white; background:{trn_col}; padding:5px 8px; border-radius:5px; text-decoration:none; font-size:11px; display:inline-block;'>{trn_txt}</a>
+                                <a href='/toggle_issue?id={d[0]}' style='color:white; background:{iss_col}; padding:6px 10px; border-radius:6px; text-decoration:none; font-size:11px; display:inline-block; margin-bottom:4px; font-weight:bold;'>{iss_txt}</a><br>
+                                <a href='/toggle_transport?id={d[0]}' style='color:white; background:{trn_col}; padding:6px 10px; border-radius:6px; text-decoration:none; font-size:11px; display:inline-block; font-weight:bold;'>{trn_txt}</a>
                             </td>
                         </tr>"""
+
+                    # دریافت سرورها برای نمایش در پنل کاربر
+                    c.execute("SELECT ip_name, group_assigned, status FROM servers")
+                    user_servers = c.fetchall()
+                    srv_grid = ""
+                    for us in user_servers:
+                        srv_grid += f"<div style='background:#1E293B; color:#FFF; padding:10px; border-radius:8px; text-align:center; font-size:12px;'><b>{us[0]}</b><br>{us[1]}</div>"
 
                     html = f"""<!DOCTYPE html>
                     <html lang="fa" dir="rtl">
                     <head>
                         <meta charset="UTF-8">
                         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                        <title>پنل هوشمند - باربرگ بندر</title>
+                        <title>پنل هوشمند اختصاصی - باربرگ بندر</title>
                         <style>
-                            body {{ font-family: Tahoma, sans-serif; background: #F4F6F9; margin: 0; padding: 0; direction: rtl; }}
-                            .header {{ background: #0277BD; color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; }}
-                            .container {{ padding: 15px; max-width: 650px; margin: auto; }}
-                            .card {{ background: white; padding: 18px; border-radius: 14px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); margin-bottom: 15px; }}
-                            input, select {{ width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }}
-                            button {{ background: #0277BD; color: white; border: none; padding: 12px; width: 100%; border-radius: 8px; font-weight: bold; cursor: pointer; }}
+                            body {{ font-family: Tahoma, sans-serif; background: #EDF2F7; margin: 0; padding: 0; direction: rtl; }}
+                            .header {{ background: #0277BD; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+                            .container {{ padding: 20px; max-width: 700px; margin: auto; }}
+                            .card {{ background: white; padding: 22px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px; }}
+                            input, select {{ width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; background: #FAFAFA; }}
+                            button {{ background: #0277BD; color: white; border: none; padding: 12px; width: 100%; border-radius: 10px; font-weight: bold; cursor: pointer; transition: 0.3s; }}
                             button:hover {{ background: #01579B; }}
                             table {{ width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }}
-                            th, td {{ border: 1px solid #eee; padding: 8px; text-align: center; vertical-align: middle; }}
-                            th {{ background: #FAFAFA; }}
-                            .logout-btn {{ background: #D32F2F; padding: 6px 12px; font-size: 12px; color: white; text-decoration: none; border-radius: 6px; }}
-                            .status-box {{ background: {server_badge_color}; color: white; padding: 10px; border-radius: 8px; text-align: center; font-size: 13px; margin-bottom: 15px; font-weight: bold; }}
-                            .card-box {{ background: #263238; color: #FFF; padding: 15px; border-radius: 10px; text-align: center; margin-bottom: 15px; }}
+                            th, td {{ border: 1px solid #edf2f7; padding: 10px; text-align: center; vertical-align: middle; }}
+                            th {{ background: #F7FAFC; color: #4A5568; }}
+                            .logout-btn {{ background: #E53E3E; padding: 8px 16px; font-size: 13px; color: white; text-decoration: none; border-radius: 8px; }}
+                            .status-box {{ background: {server_badge_color}; color: white; padding: 14px; border-radius: 12px; text-align: center; font-size: 14px; margin-bottom: 20px; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }}
+                            .card-box {{ background: #0F172A; color: #FFF; padding: 18px; border-radius: 12px; text-align: center; margin-bottom: 15px; }}
                         </style>
                     </head>
                     <body>
@@ -257,13 +288,19 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                             </div>
 
                             <div class="card">
-                                <h3>نقشه زنده و انتخاب نوع مپ (مپ سنتی / OSM / آفلاین)</h3>
+                                <h3>وضعیت سرورهای فعال اختصاصی</h3>
+                                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px;">
+                                    {srv_grid}
+                                </div>
+                            </div>
+
+                            <div class="card">
+                                <h3>انتخاب نقشه زنده (مپ سریع OSM / سناتور / آفلاین)</h3>
                                 <select name="map_type">
-                                    <option value="osm">مپ سریع OSM (پیش‌فرض)</option>
-                                    <option value="senator_fast">مپ سریع سناتور</option>
-                                    <option value="offline_hybrid">مپ هوشمند ترکیبی / آفلاین</option>
+                                    <option value="osm">نقشه سریع OSM (پیش‌فرض)</option>
+                                    <option value="senator_fast">نقشه سریع سناتور</option>
+                                    <option value="offline_hybrid">نقشه هوشمند ترکیبی / آفلاین</option>
                                 </select>
-                                <small style="color:666; display:block; margin-top:5px;">سیستم به صورت خودکار مختصات طول و عرض جغرافیایی پروانه فعالیت راننده را روی نقشه تطبیق می‌دهد.</small>
                             </div>
 
                             <div class="card">
@@ -271,10 +308,10 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                                 <form method="POST" action="/add_driver">
                                     <input type="text" name="name" placeholder="نام و نام خانوادگی راننده" required>
                                     <input type="text" name="nid" placeholder="کد ملی" required>
-                                    <div style="display: flex; gap: 5px;">
-                                        <input type="text" name="p2" placeholder="سه‌رقم" required>
+                                    <div style="display: flex; gap: 8px;">
+                                        <input type="text" name="p2" placeholder="سه‌رقم پلاک" required>
                                         <input type="text" name="let" value="ع" placeholder="حرف" required>
-                                        <input type="text" name="p1" placeholder="دورقم" required>
+                                        <input type="text" name="p1" placeholder="دورقم پلاک" required>
                                         <input type="text" name="iran" value="۸۴" placeholder="ایران" required>
                                     </div>
                                     <select name="vehicle_class">
@@ -284,38 +321,38 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                                         <option value="26ton">کلاس ۲۶ تن (ظرفیت هوشمند: ۱۵ الی ۱۶ تن)</option>
                                         <option value="40ton">کلاس ۴۰ و ۴۲ تن (ظرفیت هوشمند: ۲۰ تن)</option>
                                     </select>
-                                    <button type="submit">ثبت راننده</button>
+                                    <button type="submit">ثبت راننده جدید</button>
                                 </form>
                             </div>
 
                             <div class="card">
-                                <h3>صدور هوشمند باربرگ (با سقف ۲۰۰ میلیون ریال)</h3>
+                                <h3>صدور هوشمند باربرگ (سقف زیر ۲۰۰ میلیون ریال)</h3>
                                 <form method="POST" action="/issue_barbarg">
                                     <select name="cargo_type">
                                         <option value="سیمان">سیمان / گچ (محاسبه ریالی هوشمند)</option>
                                         <option value="تره بار">تره بار و مواد غذایی</option>
                                         <option value="تیرچه چوب">تیرچه، بلوک و چوب</option>
                                     </select>
-                                    <input type="number" name="custom_price" placeholder="مبلغ کرایه ریالی (اختیاری - پیش‌فرض هوشمند زیر ۲۰۰ میلیون)">
-                                    <button type="submit" style="background: #2E7D32;">صدور باربرگ و ساخت گیرنده تصادفی</button>
+                                    <input type="number" name="custom_price" placeholder="مبلغ کرایه ریالی (اختیاری)">
+                                    <button type="submit" style="background: #2E7D32;">صدور باربرگ با گیرنده تصادفی</button>
                                 </form>
                             </div>
 
                             <div class="card">
                                 <h3>مدیریت وضعیت صدور و حمل رانندگان</h3>
                                 <table>
-                                    <tr><th>راننده</th><th>پلاک</th><th>تناژ</th><th>وضعیت عملیات</th></tr>
+                                    <tr><th>راننده</th><th>پلاک</th><th>تناژ</th><th>عملیات</th></tr>
                                     {drivers_html if drivers_html else '<tr><td colspan="4">راننده‌ای ثبت نشده است.</td></tr>'}
                                 </table>
                             </div>
 
                             <div class="card">
-                                <h3>تمدید اشتراک و اطلاعات کارت به کارت</h3>
+                                <h3>تمدید اشتراک و اطلاعات واریز</h3>
                                 <div class="card-box">
-                                    <div>شماره کارت:</div>
-                                    <div style="font-size: 18px; color: #4FC3F7; direction: ltr; margin: 5px 0;">6219 8619 8658 9132</div>
-                                    <div>شماره شبا:</div>
-                                    <div style="font-size: 12px; color: #81C784; direction: ltr; word-break: break-all;">IR530560611828005783056501</div>
+                                    <div style="color: #94A3B8; font-size: 13px;">شماره کارت:</div>
+                                    <div style="font-size: 18px; color: #38BDF8; direction: ltr; margin: 4px 0; font-weight: bold;">6219 8619 8658 9132</div>
+                                    <div style="color: #94A3B8; font-size: 13px;">شماره شبا:</div>
+                                    <div style="font-size: 12px; color: #4ADE80; direction: ltr; word-break: break-all;">IR530560611828005783056501</div>
                                 </div>
                                 <form method="POST" action="/submit_receipt">
                                     <input type="text" name="tracking_code" placeholder="شماره پیگیری یا ۴ رقم آخر کارت" required>
@@ -501,7 +538,7 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
             custom_price = params.get('custom_price', [''])[0]
             price_rial = int(custom_price) if custom_price.isdigit() else random.randint(45000000, 185000000)
             rec_name, rec_phone = generate_random_receiver()
-            print(f"[AI Barbarg] بار: {cargo} | کرایه مکانیزه: {price_rial:,} ریال | گیرنده: {rec_name} ({rec_phone})")
+            print(f"[AI Barbarg] بار: {cargo} | کرایه: {price_rial:,} ریال | گیرنده: {rec_name} ({rec_phone})")
             self.send_response(303)
             self.send_header('Location', '/')
             self.end_headers()
@@ -509,7 +546,7 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
 def run():
     server_address = ('', PORT)
     httpd = http.server.HTTPServer(server_address, BarbargHandler)
-    print(f"سرور پیشرفته روی پورت {PORT} روشن شد...")
+    print(f"سرور تجاری و پیشرفته روی پورت {PORT} روشن شد...")
     httpd.serve_forever()
 
 if __name__ == '__main__':
