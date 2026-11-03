@@ -16,6 +16,11 @@ jobs:
         with:
           python-version: "3.10"
 
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git zip unzip openjdk-17-jdk autoconf libtool pkg-config zlib1g-dev libffi-dev libssl-dev libncursesw6 libstdc++6 zlib1g libbz2-dev libsqlite3-dev
+
       - name: Install Flet and Dependencies
         run: |
           python -m pip install --upgrade pip
@@ -23,7 +28,7 @@ jobs:
 
       - name: Build APK with Flet
         run: |
-          flet pack main.py --android
+          echo "y" | flet build apk -v
 
       - name: Find and Move APK
         run: |
