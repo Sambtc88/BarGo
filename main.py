@@ -7,14 +7,12 @@ def main(page: ft.Page):
   page.rtl = True
   page.vertical_alignment = ft.MainAxisAlignment.START
   page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
-  page.bgcolor = "#0b0f19"  # پس‌زمینه تیره مدرن و فوق‌العاده شیک
+  page.bgcolor = "#0b0f19"
 
-  # کامپوننت پلاک گرافیکی واقعی ایرانی
   def create_iran_plate(part1, code, part2):
     return ft.Container(
         content=ft.Row(
             [
-                # بخش شماره‌های پلاک
                 ft.Row(
                     [
                         ft.Text(
@@ -39,7 +37,6 @@ def main(page: ft.Page):
                     spacing=4,
                     alignment=ft.MainAxisAlignment.CENTER,
                 ),
-                # نوار آبی کنار پلاک (ایران)
                 ft.Container(
                     content=ft.Column(
                         [
@@ -78,7 +75,6 @@ def main(page: ft.Page):
         alignment=ft.alignment.center,
     )
 
-  # هدر اصلی پنل با اطلاعات کاربر و وضعیت اعتبار
   header = ft.Container(
       content=ft.Row(
           [
@@ -131,7 +127,6 @@ def main(page: ft.Page):
       border=ft.border.all(1, "#1f2937"),
   )
 
-  # وضعیت هوشمند سرور و دور زدن اختلال سامانه
   server_status = ft.Container(
       content=ft.Row(
           [
@@ -151,7 +146,6 @@ def main(page: ft.Page):
       border=ft.border.all(1, "#059669"),
   )
 
-  # منوی آبشاری انتخاب نقشه زنده / آفلاین (سناتور مپ)
   map_dropdown = ft.Dropdown(
       label="انتخاب موتور نقشه و مسیریاب زنده",
       label_style=ft.TextStyle(color="#9ca3af", size=12),
@@ -196,13 +190,11 @@ def main(page: ft.Page):
       border=ft.border.all(1, "#1f2937"),
   )
 
-  # جدول مدیریت وضعیت صدور و رانندگان همراه با پلاک گرافیکی
   def create_driver_row(name, phone, part1, code, part2, tonnage):
     plate_widget = create_iran_plate(part1, code, part2)
     return ft.Container(
         content=ft.Row(
             [
-                # اطلاعات راننده
                 ft.Column(
                     [
                         ft.Text(
@@ -216,11 +208,8 @@ def main(page: ft.Page):
                     spacing=2,
                     width=85,
                 ),
-                # پلاک گرافیکی واقعی
                 plate_widget,
-                # تناژ
                 ft.Text(tonnage, color="#38bdf8", size=11, width=45),
-                # دکمه‌های عملیاتی صدور و حمل
                 ft.Column(
                     [
                         ft.ElevatedButton(
@@ -290,7 +279,6 @@ def main(page: ft.Page):
       border=ft.border.all(1, "#1f2937"),
   )
 
-  # بخش دکمه فرمان اصلی صدور تصادفی / انبوه
   action_btn = ft.ElevatedButton(
       content=ft.Row(
           [
@@ -311,7 +299,6 @@ def main(page: ft.Page):
       width=400,
   )
 
-  # اطلاعات واریز و اشتراک
   billing_section = ft.Container(
       content=ft.Column(
           [
@@ -353,10 +340,16 @@ def main(page: ft.Page):
       border=ft.border.all(1, "#1f2937"),
   )
 
-  # چیدمان اصلی صفحه در یک اسکرول‌ویو منظم
   page.add(
       ft.ListView(
-          controls=[header, server_status, action_btn, map_section, drivers_section, billing_section],
+          controls=[
+              header,
+              server_status,
+              action_btn,
+              map_section,
+              drivers_section,
+              billing_section,
+          ],
           spacing=12,
           padding=10,
           expand=True,
@@ -364,4 +357,4 @@ def main(page: ft.Page):
   )
 
 
-ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=2727)
+ft.app(target=main)
