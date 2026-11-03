@@ -28,7 +28,6 @@ jobs:
 
       - name: Build APK with Flet
         run: |
-          # اجرای کامل ساخت اپلیکیشن اندروید با پاسخ خودکار
           echo "y" | flet build apk -v
 
       - name: Find and Move APK
@@ -40,5 +39,5 @@ jobs:
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: BarGo-App
+          name: BarGo-App-New
           path: output_apk/*.apk
