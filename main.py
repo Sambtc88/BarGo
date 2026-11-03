@@ -2,6 +2,7 @@ import http.server
 import sqlite3
 import urllib.parse
 import http.cookies
+import random
 from datetime import datetime, timedelta
 from engine import BarbargEngine
 
@@ -20,6 +21,7 @@ def init_db():
                     is_active INTEGER DEFAULT 1,
                     expire_date TEXT
                 )''')
+    # جدول پیشرفته رانندگان و تنظیمات هوشمند بار و تناژ
     c.execute('''CREATE TABLE IF NOT EXISTS drivers (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     panel_id INTEGER,
@@ -29,6 +31,8 @@ def init_db():
                     plate_letter TEXT,
                     plate_part2 TEXT,
                     plate_iran TEXT,
+                    vehicle_class TEXT,
+                    max_load_ton REAL,
                     group_num INTEGER DEFAULT 1,
                     is_active INTEGER DEFAULT 1
                 )''')
@@ -47,6 +51,16 @@ def init_db():
     return conn
 
 db_conn = init_db()
+
+def generate_random_receiver():
+    """تولید تصادفی نام، فامیل و شماره موبایل استاندارد ایرانی برای گیرنده"""
+    first_names = ["علی", "محمد", "رضا", "مهدی", "حسین", "حسن", "احمد", "محسن", "عباس", "سعید"]
+    last_names = ["پوراصفهانی", "کریمی", "موسوی", "حیدری", "قاسمی", "مرادی", "صادقی", "زارعی", "رضایی", "کریمیان"]
+    phone_prefix = ["0917", "0936", "0990", "0913", "0902"]
+    
+    name = f"{random.choice(first_names)} {random.choice(last_names)}"
+    phone = f"{random.choice(phone_prefix)}{random.randint(100, 999)}{random.randint(1000, 9999)}"
+    return name, phone
 
 class BarbargHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
@@ -134,7 +148,7 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                     pending_receipts = c.fetchall()
                     receipts_html = ""
                     for rec in pending_receipts:
-                        receipts_html += f"<tr><td>{rec[1]}</td><td>کد پیگیری: {rec[2]} - مبلغ: {rec[3]}</td><td><a href='/approve_receipt?id={rec[0]}' style='color:green; font-weight:bold;'>تایید و تمدید</a></td></tr>"
+                        receipts_html += f"<tr><td>{rec[1]}</td><td>کد پیگیری: {rec[2]} - مبلغ: {rec[3]} ریال</td><td><a href='/approve_receipt?id={rec[0]}' style='color:green; font-weight:bold;'>تایید و تمدید</a></td></tr>"
 
                     html = f"""<!DOCTYPE html>
                     <html lang="fa" dir="rtl">
@@ -198,19 +212,19 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                     c.execute("SELECT COUNT(*) FROM drivers WHERE panel_id = ?", (panel_id,))
                     current_plates_count = c.fetchone()[0]
 
-                    c.execute("SELECT name, national_id, plate_part1, plate_letter, plate_part2, plate_iran, group_num FROM drivers WHERE panel_id = ?", (panel_id,))
+                    c.execute("SELECT name, national_id, plate_part1, plate_letter, plate_part2, plate_iran, vehicle_class, max_load_ton, group_num FROM drivers WHERE panel_id = ?", (panel_id,))
                     drivers = c.fetchall()
 
                     drivers_html = ""
                     for d in drivers:
-                        drivers_html += f"<tr><td>{d[0]}</td><td>{d[1]}</td><td>{d[2]} {d[3]} {d[4]} - ایران {d[5]}</td><td>گروه {d[6]}</td></tr>"
+                        drivers_html += f"<tr><td>{d[0]}</td><td>{d[1]}</td><td>{d[2]} {d[3]} {d[4]} - ایران {d[5]}</td><td>{d[6]} ({d[7]} تن)</td><td>گروه {d[8]}</td></tr>"
 
                     html = f"""<!DOCTYPE html>
                     <html lang="fa" dir="rtl">
                     <head>
                         <meta charset="UTF-8">
                         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                        <title>پنل اختصاصی - باربرگ بندر</title>
+                        <title>پنل هوشمند اختصاصی - باربرگ بندر</title>
                         <style>
                             body {{ font-family: Tahoma, sans-serif; background: #F2F5F8; margin: 0; padding: 0; direction: rtl; }}
                             .header {{ background: #0277BD; color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; }}
@@ -225,12 +239,11 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                             .logout-btn {{ background: #D32F2F; width: auto; padding: 6px 12px; font-size: 12px; color: white; text-decoration: none; border-radius: 5px; }}
                             .status-box {{ background: {server_badge_color}; color: white; padding: 10px; border-radius: 8px; text-align: center; font-size: 13px; margin-bottom: 15px; }}
                             .card-box {{ background: #263238; color: #FFF; padding: 15px; border-radius: 10px; text-align: center; margin-bottom: 15px; font-weight: bold; }}
-                            .card-box img {{ max-width: 100%; height: auto; border-radius: 8px; margin-top: 10px; }}
                         </style>
                     </head>
                     <body>
                         <div class="header">
-                            <span>کاربر: {username} | اعتبار: {days_left} روز مانده</span>
+                            <span>کاربر: {username} | اعتبار: {days_left} روز</span>
                             <a href="/logout" class="logout-btn">خروج</a>
                         </div>
                         <div class="container">
@@ -239,25 +252,7 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                             </div>
 
                             <div class="card">
-                                <h3>تمدید اشتراک و اطلاعات واریز</h3>
-                                <div class="card-box">
-                                    <div style="font-size: 14px; color: #CFD8DC; margin-bottom: 5px;">شماره کارت:</div>
-                                    <div style="font-size: 18px; color: #4FC3F7; direction: ltr; margin-bottom: 10px;">6219 8619 8658 9132</div>
-                                    <div style="font-size: 14px; color: #CFD8DC; margin-bottom: 5px;">شماره شبا:</div>
-                                    <div style="font-size: 13px; color: #81C784; direction: ltr; word-break: break-all;">IR530560611828005783056501</div>
-                                    
-                                    <!-- نمایش تصویر کارت ارسال شده توسط شما -->
-                                    <img src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/4QBaRXhpZgAATU0AKgAAAAgABAEaAAUAAAABAAAAPgEbAAUAAAABAAAARgEoAAMAAAABAAIAAAExAAIAAAARAAAATgAAAAAAAABIAAAAAQAAAEgAAAABPHN1cmVjaXRodcDAAQAcEAAIAAAAAQAAAA==" alt="اطلاعات کارت">
-                                </div>
-                                <form method="POST" action="/submit_receipt">
-                                    <input type="text" name="tracking_code" placeholder="شماره پیگیری یا چهار رقم آخر کارت" required>
-                                    <input type="number" name="amount" placeholder="مبلغ واریزی (تومان)" required>
-                                    <button type="submit" style="background: #2E7D32;">ارسال فیش واریزی برای تمدید</button>
-                                </form>
-                            </div>
-
-                            <div class="card">
-                                <h3>ثبت پلاک راننده جدید ({current_plates_count}/{max_plates})</h3>
+                                <h3>ثبت هوشمند پلاک و تعیین تناژ ماشین ({current_plates_count}/{max_plates})</h3>
                                 <form method="POST" action="/add_driver">
                                     <input type="text" name="name" placeholder="نام و نام خانوادگی راننده" required>
                                     <input type="text" name="nid" placeholder="کد ملی" required>
@@ -267,20 +262,41 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                                         <input type="text" name="p1" placeholder="دورقم" required>
                                         <input type="text" name="iran" value="۸۴" placeholder="ایران" required>
                                     </div>
+                                    <select name="vehicle_class">
+                                        <option value="3.5ton">کلاس ۳.۵ تن (ظرفیت هوشمند: حداکثر ۲ تن)</option>
+                                        <option value="6ton">کلاس ۶ تن (ظرفیت هوشمند: حداکثر ۳.۵ تن)</option>
+                                        <option value="19ton">کلاس ۱۹ تن (ظرفیت هوشمند: حداکثر ۱۰ تن)</option>
+                                        <option value="26ton">کلاس ۲۶ تن (ظرفیت هوشمند: ۱۵ الی ۱۶ تن)</option>
+                                        <option value="40ton">کلاس ۴۰ و ۴۲ تن (ظرفیت هوشمند: ۲۰ تن)</option>
+                                    </select>
                                     <select name="group_num">
                                         <option value="1">گروه ۱</option>
                                         <option value="2">گروه ۲</option>
                                         <option value="3">گروه ۳</option>
                                     </select>
-                                    <button type="submit">ثبت و ارسال پلاک</button>
+                                    <button type="submit">ثبت راننده و خودرو</button>
                                 </form>
                             </div>
 
                             <div class="card">
-                                <h3>لیست پلاک‌های شما</h3>
+                                <h3>صدور باربرگ هوشمند (با قیمت‌گذاری ریالی و گیرنده تصادفی)</h3>
+                                <form method="POST" action="/issue_barbarg">
+                                    <select name="cargo_type">
+                                        <option value="سیمان">سیمان / گچ / مصالح ساختمانی</option>
+                                        <option value="تره بار">تره بار و مواد غذایی</option>
+                                        <option value="تیرچه چوب">تیرچه، بلوک و چوب</option>
+                                        <option value="مواد معدنی">مواد معدنی و سنگ</option>
+                                    </select>
+                                    <input type="number" name="custom_price" placeholder="مبلغ کرایه به ریال (خالی بگذارید تا هوش مصنوعی تعیین کند)" />
+                                    <button type="submit" style="background: #2E7D32;">صدور هوشمند باربرگ</button>
+                                </form>
+                            </div>
+
+                            <div class="card">
+                                <h3>لیست رانندگان و خودروها</h3>
                                 <table>
-                                    <tr><th>راننده</th><th>کد ملی</th><th>پلاک</th><th>گروه</th></tr>
-                                    {drivers_html if drivers_html else '<tr><td colspan="4">پلاک ثبت نشده است.</td></tr>'}
+                                    <tr><th>راننده</th><th>کد ملی</th><th>پلاک</th><th>کلاس و تناژ</th><th>گروه</th></tr>
+                                    {drivers_html if drivers_html else '<tr><td colspan="5">راننده‌ای ثبت نشده است.</td></tr>'}
                                 </table>
                             </div>
                         </div>
@@ -388,24 +404,6 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header('Location', '/')
             self.end_headers()
 
-        elif self.path == "/submit_receipt":
-            cookie = http.cookies.SimpleCookie(self.headers.get('Cookie'))
-            username = cookie.get('session').value if 'session' in cookie else None
-            if username:
-                c = db_conn.cursor()
-                c.execute("SELECT id FROM panels WHERE username = ?", (username,))
-                p = c.fetchone()
-                if p:
-                    panel_id = p[0]
-                    tracking_code = params.get('tracking_code', [''])[0]
-                    amount = params.get('amount', [''])[0]
-                    c.execute("INSERT INTO receipts (panel_id, username, tracking_code, amount, status) VALUES (?, ?, ?, ?, 'pending')",
-                              (panel_id, username, tracking_code, amount))
-                    db_conn.commit()
-            self.send_response(303)
-            self.send_header('Location', '/')
-            self.end_headers()
-
         elif self.path == "/add_driver":
             cookie = http.cookies.SimpleCookie(self.headers.get('Cookie'))
             username = cookie.get('session').value if 'session' in cookie else None
@@ -416,7 +414,6 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                 panel = c.fetchone()
                 if panel:
                     panel_id, max_plates = panel
-
                     c.execute("SELECT COUNT(*) FROM drivers WHERE panel_id = ?", (panel_id,))
                     count = c.fetchone()[0]
 
@@ -427,14 +424,40 @@ class BarbargHandler(http.server.SimpleHTTPRequestHandler):
                         let = params.get('let', [''])[0]
                         p1 = params.get('p1', [''])[0]
                         iran = params.get('iran', [''])[0]
+                        v_class = params.get('vehicle_class', ['3.5ton'])[0]
                         group_num = params.get('group_num', ['1'])[0]
 
-                        plate_full = f"{p1} {let} {p2} - ایران {iran}"
-                        engine.register_plate_task(plate_full, group_num)
+                        # هوش مصنوعی تناژ بر اساس کلاس خودرو
+                        load_map = {
+                            "3.5ton": 2.0,
+                            "6ton": 3.5,
+                            "19ton": 10.0,
+                            "26ton": 15.5,
+                            "40ton": 20.0
+                        }
+                        max_ton = load_map.get(v_class, 2.0)
 
-                        c.execute("INSERT INTO drivers (panel_id, name, national_id, plate_part1, plate_letter, plate_part2, plate_iran, group_num) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                                  (panel_id, name, nid, p1, let, p2, iran, group_num))
+                        c.execute("INSERT INTO drivers (panel_id, name, national_id, plate_part1, plate_letter, plate_part2, plate_iran, vehicle_class, max_load_ton, group_num) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                  (panel_id, name, nid, p1, let, p2, iran, v_class, max_ton, group_num))
                         db_conn.commit()
+
+            self.send_response(303)
+            self.send_header('Location', '/')
+            self.end_headers()
+
+        elif self.path == "/issue_barbarg":
+            # هوش مصنوعی صدور باربرگ، محاسبه ریالی کرایه و گیرنده تصادفی
+            cargo_type = params.get('cargo_type', ['سیمان'])[0]
+            custom_price = params.get('custom_price', [''])[0]
+
+            # محاسبه هوشمند قیمت ریالی (حداکثر ۲۰۰ میلیون ریال برای مصالح)
+            if custom_price.isdigit():
+                price_rial = int(custom_price)
+            else:
+                price_rial = random.randint(45000000, 185000000) # بین ۴۵ تا ۱۸۵ میلیون ریال
+
+            receiver_name, receiver_phone = generate_random_receiver()
+            print(f"[AI Barbarg] نوع بار: {cargo_type} | کرایه: {price_rial:,} ریال | گیرنده تصادفی: {receiver_name} ({receiver_phone})")
 
             self.send_response(303)
             self.send_header('Location', '/')
