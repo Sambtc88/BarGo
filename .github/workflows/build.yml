@@ -16,29 +16,18 @@ jobs:
         with:
           python-version: "3.10"
 
-      - name: Install Dependencies
+      - name: Install System Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y git zip unzip openjdk-17-jdk autoconf libtool pkg-config zlib1g-dev libffi-dev libssl-dev libncursesw6 libstdc++6 zlib1g libbz2-dev libsqlite3-dev
-          python -m pip install --upgrade pip
-          pip install --upgrade buildozer cython==0.29.36 flet httpx
 
-      - name: Initialize and Build with Buildozer Directly
+      - name: Install Compatible Build Environment
         run: |
-          # اگر فایل buildozer.spec وجود ندارد، مقداردهی اولیه کن
-          if [ ! -f "buildozer.spec" ]; then
-            buildozer init
-          fi
-          # اصلاح اجباری پارامترهای حیاتی در بیلدوز برای جلوگیری از خطا
-          sed -i 's/#充满/package.name = bargo/g' buildozer.spec || true
-          sed -i 's/package.name = .*/package.name = bargo/g' buildozer.spec
-          sed -i 's/package.domain = .*/package.domain = com.bargor.app/g' buildozer.spec
-          sed -i 's/source.include_exts = .*/source.include_exts = py,png,jpg,kv,atlas/g' buildozer.spec
-          sed -i 's/requirements = .*/requirements = python3,flet,httpx/g' buildozer.spec
-          sed -i 's/#android.accept_sdk_license = False/android.accept_sdk_license = True/g' buildozer.spec
-          sed -i 's/android.accept_sdk_license = .*/android.accept_sdk_license = True/g' buildozer.spec
+          python -m pip install --upgrade pip
+          pip install "setuptools==65.5.0" cython==0.29.36 buildozer flet httpx
 
-          # اجرای بیلدوز
+      - name: Run Buildozer
+        run: |
           buildozer -v android debug
 
       - name: Find and Move APK
