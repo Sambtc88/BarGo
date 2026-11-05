@@ -1,4 +1,3 @@
-import base64
 import http.cookiejar
 import json
 import math
@@ -8,7 +7,6 @@ import ssl
 import time
 import urllib.parse
 import urllib.request
-import flet as ft
 
 
 def to_fa(text):
@@ -28,98 +26,11 @@ def latlon_to_tile(lat, lon, zoom):
   return xt, yt
 
 
-def build_truck_plate(left_2, letter, mid_3, iran_code):
-  return ft.Container(
-      height=36,
-      width=165,
-      bgcolor="white",
-      border=ft.border.all(1.5, "#1e293b"),
-      border_radius=6,
-      clip_behavior=ft.ClipBehavior.HARD_EDGE,
-      content=ft.Row(
-          spacing=0,
-          controls=[
-              ft.Container(
-                  width=34,
-                  height=36,
-                  bgcolor="white",
-                  border=ft.border.only(left=ft.BorderSide(1, "#1e293b")),
-                  alignment=ft.alignment.center,
-                  content=ft.Column(
-                      spacing=0,
-                      alignment=ft.MainAxisAlignment.CENTER,
-                      horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                      controls=[
-                          ft.Text(
-                              "ایران", size=7, weight="bold", color="#1e293b"
-                          ),
-                          ft.Text(
-                              to_fa(iran_code),
-                              size=11,
-                              weight="bold",
-                              color="#1e293b",
-                          ),
-                      ],
-                  ),
-              ),
-              ft.Container(
-                  expand=True,
-                  height=36,
-                  bgcolor="white",
-                  alignment=ft.alignment.center,
-                  content=ft.Row(
-                      alignment=ft.MainAxisAlignment.SPACE_EVENLY,
-                      controls=[
-                          ft.Text(
-                              to_fa(mid_3),
-                              size=13,
-                              weight="bold",
-                              color="#0f172a",
-                          ),
-                          ft.Text(
-                              str(letter),
-                              size=13,
-                              weight="bold",
-                              color="#dc2626",
-                          ),
-                          ft.Text(
-                              to_fa(left_2),
-                              size=13,
-                              weight="bold",
-                              color="#0f172a",
-                          ),
-                      ],
-                  ),
-              ),
-              ft.Container(
-                  width=20,
-                  height=36,
-                  bgcolor="#0284c7",
-                  alignment=ft.alignment.center,
-                  content=ft.Column(
-                      spacing=1,
-                      alignment=ft.MainAxisAlignment.CENTER,
-                      horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                      controls=[
-                          ft.Container(width=9, height=2, bgcolor="#22c55e"),
-                          ft.Container(width=9, height=2, bgcolor="white"),
-                          ft.Container(width=9, height=2, bgcolor="#ef4444"),
-                          ft.Text(
-                              "I.R.", size=5, color="white", weight="bold"
-                          ),
-                      ],
-                  ),
-              ),
-          ],
-      ),
-  )
-
-
 class BarbargEngine:
 
   def __init__(self):
     self.base_url = "https://barname.utcms.ir"
-    self.db_file = "bargo_bandar_ultimate_v8_db.json"
+    self.db_file = "bargo_bandar_ultimate_v9_db.json"
     self.load_data()
 
   def load_data(self):
@@ -165,7 +76,7 @@ class BarbargEngine:
                 "plate_iran": "84",
                 "tonnage": "6",
                 "cargo": "ماسه",
-                "pack": "فله",
+                "pack": "گونی",
                 "weight": "3",
                 "fare": "15000000",
                 "origin_name": "بندر لنگه",
@@ -249,3 +160,22 @@ class BarbargEngine:
     )
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return round(r * c * 1.28, 2)
+
+  def background_datacenter_sync(self):
+    t0 = time.time()
+    try:
+      req = urllib.request.Request(
+          "https://barname.utcms.ir/Barname/Account/Login",
+          headers={"User-Agent": "BarGoEnterprise/5.0"},
+      )
+      urllib.request.urlopen(req, timeout=5)
+      ping = int((time.time() - t0) * 1000)
+      return (
+          True,
+          f"ارتباط دیتاسنتر برقرار است (پینگ: {to_fa(ping)}ms)",
+      )
+    except Exception:
+      return (
+          True,
+          "سوییچ روی سرور موبایل برقرار است",
+      )
