@@ -186,7 +186,7 @@ def main(page: ft.Page):
         ],
     )
 
-  # ==================== ۲. ویرایش کامل با نقشه ماهواره‌ای بزرگ، اسکرول و مختصات زنده در پایین ====================
+  # ==================== ۲. ویرایش پیشرفته با نقشه ماهواره‌ای بزرگ، اسکرول و مختصات زنده در پایین ====================
   def open_edit_modal(drv):
     tf_nid = ft.TextField(
         label="کد ملی", value=drv["national_id"], text_size=12, expand=True
@@ -254,7 +254,7 @@ def main(page: ft.Page):
 
     tiles_grid = ft.Column(spacing=0)
     pin_o = ft.Container(
-        left=105,
+        left=120,
         top=110,
         bgcolor="#dc2626",
         padding=4,
@@ -262,7 +262,7 @@ def main(page: ft.Page):
         content=ft.Text("📍 مبدأ", color="white", size=9, weight="bold"),
     )
     pin_d = ft.Container(
-        left=230,
+        left=250,
         top=60,
         bgcolor="#0f172a",
         padding=4,
@@ -282,7 +282,7 @@ def main(page: ft.Page):
           u = f"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{cy+dy}/{cx+dx}"
           r_imgs.append(
               ft.Image(
-                  src=u, width=130, height=115, fit=ft.ImageFit.COVER
+                  src=u, width=140, height=115, fit=ft.ImageFit.COVER
               )
           )
         rows_t.append(ft.Row(spacing=0, controls=r_imgs))
@@ -297,10 +297,10 @@ def main(page: ft.Page):
       page.update()
 
     def on_map_tap(ev: ft.TapEvent):
-      lx = max(10, min(370, int(ev.local_x)))
-      ly = max(10, min(210, int(ev.local_y)))
-      clat = round(map_state["lat"] + (100.0 - ly) * 0.001, 5)
-      clon = round(map_state["lon"] + (lx - 185.0) * 0.001, 5)
+      lx = max(10, min(400, int(ev.local_x)))
+      ly = max(10, min(220, int(ev.local_y)))
+      clat = round(map_state["lat"] + (110.0 - ly) * 0.001, 5)
+      clon = round(map_state["lon"] + (lx - 200.0) * 0.001, 5)
       if map_state["target"] == "origin":
         pin_o.left, pin_o.top = lx - 12, ly - 10
         tf_olat.value, tf_olon.value = str(clat), str(clon)
@@ -325,7 +325,7 @@ def main(page: ft.Page):
       page.update()
 
     map_large_box = ft.Container(
-        width=380,
+        width=400,
         height=220,
         bgcolor="#0f172a",
         border_radius=12,
@@ -334,7 +334,7 @@ def main(page: ft.Page):
         content=ft.GestureDetector(
             on_tap_down=on_map_tap,
             content=ft.Stack(
-                width=380,
+                width=400,
                 height=220,
                 controls=[
                     tiles_grid,
@@ -413,8 +413,8 @@ def main(page: ft.Page):
         modal=True,
         title=ft.Text(f"ویرایش: {drv['name']}", size=15, weight="bold"),
         content=ft.Container(
-            width=400,
-            height=510,
+            width=420,
+            height=520,
             content=ft.Column(
                 scroll=ft.ScrollMode.AUTO,
                 spacing=8,
@@ -427,7 +427,7 @@ def main(page: ft.Page):
                         alignment=ft.MainAxisAlignment.SPACE_EVENLY,
                         controls=[
                             ft.ElevatedButton(
-                                "تعیین لمس: مبدأ 📍",
+                                "هدف لمس: مبدأ 📍",
                                 bgcolor="#dc2626",
                                 color="white",
                                 height=28,
@@ -436,7 +436,7 @@ def main(page: ft.Page):
                                 ),
                             ),
                             ft.ElevatedButton(
-                                "تعیین لمس: مقصد 🏁",
+                                "هدف لمس: مقصد 🏁",
                                 bgcolor="#0f172a",
                                 color="white",
                                 height=28,
@@ -860,7 +860,7 @@ def main(page: ft.Page):
     barbarg_grp = g
     render_tab()
 
-  # ==================== ۶. پروانه و سهمیه (نمای افقی کامل + انتخاب سال و نوع سهمیه) ====================
+  # ==================== ۶. پروانه و سهمیه (نمای افقی کامل + انتخاب سال از ۱۴۰۵ تا ۱۴۱۰ و نوع سهمیه) ====================
   selected_fuel_year = "۱۴۰۵"
   selected_fuel_type = "عملکردی"
 
@@ -876,6 +876,10 @@ def main(page: ft.Page):
         options=[
             ft.dropdown.Option("۱۴۰۵", "۱۴۰۵"),
             ft.dropdown.Option("۱۴۰۶", "۱۴۰۶"),
+            ft.dropdown.Option("۱۴۰۷", "۱۴۰۷"),
+            ft.dropdown.Option("۱۴۰۸", "۱۴۰۸"),
+            ft.dropdown.Option("۱۴۰۹", "۱۴۰۹"),
+            ft.dropdown.Option("۱۴۱۰", "۱۴۱۰"),
         ],
         on_change=lambda e: (
             globals().__setitem__("selected_fuel_year", e.control.value),
@@ -1097,7 +1101,7 @@ def main(page: ft.Page):
         padding=ft.padding.only(top=38, bottom=12, left=14, right=14),
         border=ft.border.only(bottom=ft.BorderSide(1.5, "#1e293b")),
         content=ft.Row(
-            alignment=ft.MainAxisAlignment.SPACE_EVENLY,
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             controls=[
                 ft.Container(
                     bgcolor="#1e293b",
