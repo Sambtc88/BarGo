@@ -473,7 +473,7 @@ def main(page: ft.Page):
     dlg.open = True
     page.update()
 
-  # ==================== ۳. تب کاربران با پلاک کامیونی طبیعی ====================
+  # ==================== ۳. تب کاربران و پلاک‌های کامیونی طبیعی ====================
   def build_users_tab():
     rows = ft.Column(spacing=6)
     for idx, drv in enumerate(engine.data["drivers"], start=1):
@@ -772,6 +772,12 @@ def main(page: ft.Page):
     g_list = [d for d in engine.data["drivers"] if d["group"] == barbarg_grp]
     for idx, d in enumerate(g_list, 1):
       trip_on = d.get("trip_enabled", True)
+
+      def do_real_issue(ev, drv=d):
+        ok, msg = engine.real_connect_and_issue(drv)
+        render_tab()
+        show_popup("ثبت بار در سامانه", msg, is_err=not ok)
+
       cards.controls.append(
           ft.Container(
               bgcolor="white",
@@ -821,11 +827,7 @@ def main(page: ft.Page):
                           bgcolor="#16a34a",
                           color="white",
                           height=30,
-                          on_click=lambda ev, drv=d: show_popup(
-                              "موفق",
-                              f"استارت ثبت بار و شروع حمل برای {drv['name']}"
-                              " انجام شد.",
-                          ),
+                          on_click=do_real_issue,
                       ),
                   ],
               ),
@@ -896,6 +898,13 @@ def main(page: ft.Page):
     )
 
     for d in engine.data["drivers"]:
+
+      def run_inquiry(ev, drv=d, m=mode):
+        ok, msg = engine.real_inquiry_datacenter(
+            drv, "fuel" if m == "fuel" else "license"
+        )
+        show_popup("استعلام دیتاسنتر سامانه", msg, is_err=not ok)
+
       sub_txt = (
           f"فعالیت: {d['fleet_lic_status']} | اشتغال:"
           f" {to_fa(d['driver_lic_days'])}"
@@ -931,11 +940,7 @@ def main(page: ft.Page):
                           bgcolor="#0284c7",
                           color="white",
                           height=28,
-                          on_click=lambda ev, drv=d: show_popup(
-                              "استعلام سامانه",
-                              f"راننده: {drv['name']}\nاطلاعات با موفقیت از"
-                              " دیتاسنتر بارگذاری شد.",
-                          ),
+                          on_click=run_inquiry,
                       ),
                   ],
               ),
@@ -1092,7 +1097,7 @@ def main(page: ft.Page):
         padding=ft.padding.only(top=38, bottom=12, left=14, right=14),
         border=ft.border.only(bottom=ft.BorderSide(1.5, "#1e293b")),
         content=ft.Row(
-            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            alignment=ft.MainAxisAlignment.SPACE_EVENLY,
             controls=[
                 ft.Container(
                     bgcolor="#1e293b",
