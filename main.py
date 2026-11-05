@@ -4,13 +4,7 @@ import traceback
 import flet as ft
 
 try:
-  from engine import (
-      BarbargEngine,
-      build_iran_plate,
-      latlon_to_tile,
-      tile_to_latlon,
-      to_fa,
-  )
+  from engine import BarbargEngine, build_truck_plate, to_fa
 except Exception:
   BarbargEngine = None
   ENGINE_ERR = traceback.format_exc()
@@ -36,18 +30,15 @@ def main(page: ft.Page):
     return
 
   engine = BarbargEngine()
-  current_user = engine.data["clients"][0]
+  current_client = engine.data["clients"][0]
   active_tab = "کاربران"
   barbarg_grp = None
-  amen_sub = None
   body_holder = ft.Container(expand=True, padding=10)
-  ai_badge_Text = ft.Text("۳ هشدار", size=10, color="white", weight="bold")
 
-  # پاپ‌آپ استاندارد وضعیت و هشدار قرمز/سبز
+  # پاپ‌آپ اطلاع‌رسانی
   def show_popup(title, msg, is_err=False):
     bg = "#fee2e2" if is_err else "#dcfce7"
     col = "#991b1b" if is_err else "#166534"
-    ic = ft.icons.WARNING_AMBER_ROUNDED if is_err else ft.icons.CHECK_CIRCLE
     dlg = ft.AlertDialog(
         modal=True,
         content_padding=0,
@@ -55,31 +46,19 @@ def main(page: ft.Page):
             width=335,
             bgcolor=bg,
             border_radius=16,
-            border=ft.border.all(2, "#ef4444" if is_err else "#22c55e"),
             padding=14,
             content=ft.Column(
                 tight=True,
-                spacing=10,
+                spacing=8,
                 controls=[
                     ft.Row(
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                         controls=[
-                            ft.Row(
-                                spacing=6,
-                                controls=[
-                                    ft.Icon(ic, color=col, size=22),
-                                    ft.Text(
-                                        title,
-                                        size=14,
-                                        weight="bold",
-                                        color=col,
-                                    ),
-                                ],
+                            ft.Text(
+                                title, size=15, weight="bold", color=col
                             ),
                             ft.Text(
-                                to_fa(time.strftime("%H:%M:%S")),
-                                size=11,
-                                color="#334155",
+                                to_fa(time.strftime("%H:%M:%S")), size=11
                             ),
                         ],
                     ),
@@ -91,15 +70,15 @@ def main(page: ft.Page):
                         content=ft.Text(
                             msg,
                             size=12,
-                            color="#0f172a",
                             weight="bold",
+                            color="#0f172a",
                             text_align=ft.TextAlign.CENTER,
                         ),
                     ),
                     ft.ElevatedButton(
                         "متوجه شدم ←",
-                        bgcolor="#0f172a" if is_err else "white",
-                        color="white" if is_err else "#0f172a",
+                        bgcolor="white",
+                        color="#0f172a",
                         width=305,
                         on_click=lambda e: setattr(dlg, "open", False)
                         or page.update(),
@@ -112,7 +91,7 @@ def main(page: ft.Page):
     dlg.open = True
     page.update()
 
-  # ==================== ۱. صفحه ورود (Login) ====================
+  # ==================== ۱. صفحه لاگین با تیک اجباری و کادرهای بنفش زیبا ====================
   def build_login():
     tf_u = ft.TextField(
         hint_text="نام کاربری",
@@ -128,17 +107,31 @@ def main(page: ft.Page):
         bgcolor="#f1f5f9",
         border_radius=10,
     )
-    err = ft.Text("", color="#dc2626", size=12, weight="bold")
+    chk_robot = ft.Checkbox(
+        label="من ربات نیستم (تایید امنیتی)", value=False
+    )
+    err_txt = ft.Text("", color="#dc2626", size=12, weight="bold")
+    btn_login = ft.ElevatedButton(
+        "ورود به پنل", bgcolor="#7c3aed", color="white", width=310, height=45
+    )
 
     def do_log(e):
+      if not chk_robot.value:
+        err_txt.value = (
+            "لطفاً ابتدا تیک «من ربات نیستم» را به صورت دستی فعال کنید!"
+        )
+        page.update()
+        return
       ok, c = engine.authenticate(tf_u.value, tf_p.value)
       if ok:
-        nonlocal current_user
-        current_user = c
+        nonlocal current_client
+        current_client = c
         build_scaffold()
       else:
-        err.value = "نام کاربری یا کلمه عبور اشتباه است!"
+        err_txt.value = "نام کاربری یا رمز عبور اشتباه است."
         page.update()
+
+    btn_login.on_click = do_log
 
     return ft.View(
         route="/login",
@@ -148,291 +141,55 @@ def main(page: ft.Page):
         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
         controls=[
             ft.Container(
-                width=340,
-                padding=22,
+                width=350,
+                padding=20,
                 bgcolor="white",
                 border_radius=20,
                 content=ft.Column(
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                     spacing=12,
                     controls=[
+                        # کادر بنفش بالایی با عنوان «باربرگ درون شهری بندر»
                         ft.Container(
-                            width=68,
-                            height=68,
-                            bgcolor="#0f172a",
-                            border_radius=18,
+                            width=320,
+                            padding=12,
+                            bgcolor="#7c3aed",
+                            border_radius=12,
                             alignment=ft.alignment.center,
-                            content=ft.Icon(
-                                ft.icons.LOCAL_SHIPPING_ROUNDED,
-                                color="#38bdf8",
-                                size=38,
+                            content=ft.Text(
+                                "باربرگ درون شهری بندر",
+                                size=17,
+                                weight="bold",
+                                color="white",
                             ),
-                        ),
-                        ft.Text(
-                            "بارگو بندر",
-                            size=24,
-                            weight="bold",
-                            color="#0f172a",
-                        ),
-                        ft.Text(
-                            "سامانه هوشمند باربرگ و پایش ناوگان",
-                            size=11,
-                            color="#64748b",
                         ),
                         tf_u,
                         tf_p,
+                        chk_robot,
+                        # کادر بنفش پایینی با متن «خوش آمدید ❤️»
                         ft.Container(
-                            padding=10,
-                            bgcolor="#f0fdf4",
-                            border=ft.border.all(1.5, "#86efac"),
-                            border_radius=10,
-                            content=ft.Row(
-                                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                                controls=[
-                                    ft.Text(
-                                        "✓ من ربات نیستم (تأیید هوشمند)",
-                                        size=11,
-                                        weight="bold",
-                                        color="#166534",
-                                    ),
-                                    ft.Icon(
-                                        ft.icons.VERIFIED_USER,
-                                        color="#0284c7",
-                                        size=18,
-                                    ),
-                                ],
+                            width=320,
+                            padding=12,
+                            bgcolor="#f3e8ff",
+                            border=ft.border.all(1.5, "#d8b4fe"),
+                            border_radius=12,
+                            alignment=ft.alignment.center,
+                            content=ft.Text(
+                                "خوش آمدید ❤️",
+                                size=14,
+                                weight="bold",
+                                color="#6b21a8",
                             ),
                         ),
-                        err,
-                        ft.ElevatedButton(
-                            "ورود به پنل بارگو بندر",
-                            bgcolor="#0284c7",
-                            color="white",
-                            width=300,
-                            height=45,
-                            on_click=do_log,
-                        ),
+                        err_txt,
+                        btn_login,
                     ],
                 ),
             )
         ],
     )
 
-  # ==================== ۲. پنجره لاگین زنده کپچا به درگاه barname.utcms.ir ====================
-  def open_live_portal_captcha_modal(drv, after_op="issue"):
-    st_lbl = ft.Text(
-        "⏳ در حال دریافت تصویر کپچای زنده از barname.utcms.ir ...",
-        size=11,
-        color="#0369a1",
-        weight="bold",
-    )
-    img_box = ft.Container(
-        height=60,
-        width=180,
-        bgcolor="#f1f5f9",
-        border_radius=8,
-        alignment=ft.alignment.center,
-        content=ft.Text("در حال بارگذاری کپچا...", size=10),
-    )
-    tf_cap = ft.TextField(
-        label="کد کپچای تصویر (یا تشخیص خودکار AI)",
-        text_size=13,
-        height=44,
-    )
-    tf_api = ft.TextField(
-        label="کلید Gemini AI (اختیاری - برای حل خودکار کپچا)",
-        value=engine.data["settings"].get("gemini_api_key", ""),
-        text_size=11,
-        height=40,
-    )
-
-    def refresh_cap(e=None):
-      engine.data["settings"]["gemini_api_key"] = tf_api.value.strip()
-      engine.save_data()
-      info = engine.fetch_login_page_and_captcha(drv)
-      st_lbl.value = info["msg"]
-      st_lbl.color = "#16a34a" if info["ok"] else "#dc2626"
-      if info["captcha_b64"]:
-        img_box.content = ft.Image(
-            src_base64=info["captcha_b64"],
-            width=170,
-            height=55,
-            fit=ft.ImageFit.CONTAIN,
-        )
-      else:
-        img_box.content = ft.Text(
-            "کپچا دریافت نشد (محدودیت شبکه)", size=10, color="#dc2626"
-        )
-      if info["auto_captcha"]:
-        tf_cap.value = info["auto_captcha"]
-        st_lbl.value += f" | حل خودکار AI: {info['auto_captcha']}"
-      page.update()
-
-    def do_submit_portal(e):
-      st_lbl.value = "🚀 در حال ارسال لاگین و ثبت باربرگ در درگاه utcms.ir ..."
-      page.update()
-      ok_l, msg_l = engine.submit_real_portal_login(drv, tf_cap.value.strip())
-      if ok_l:
-        ok_op, msg_op = engine.execute_portal_operation(
-            drv, after_op, tf_cap.value.strip()
-        )
-        dlg.open = False
-        render_tab()
-        show_popup("ثبت واقعی در درگاه", msg_op, is_err=not ok_op)
-      else:
-        st_lbl.value = msg_l
-        st_lbl.color = "#dc2626"
-        page.update()
-
-    dlg = ft.AlertDialog(
-        modal=True,
-        title=ft.Text(
-            f"🔐 اتصال زنده به درگاه: {drv['name']}", size=14, weight="bold"
-        ),
-        content=ft.Container(
-            width=340,
-            height=290,
-            content=ft.Column(
-                spacing=8,
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                controls=[
-                    st_lbl,
-                    ft.Row(
-                        alignment=ft.MainAxisAlignment.CENTER,
-                        controls=[
-                            img_box,
-                            ft.IconButton(
-                                icon=ft.icons.REFRESH,
-                                icon_color="#0284c7",
-                                tooltip="دریافت مجدد کپچا",
-                                on_click=refresh_cap,
-                            ),
-                        ],
-                    ),
-                    tf_cap,
-                    tf_api,
-                ],
-            ),
-        ),
-        actions=[
-            ft.ElevatedButton(
-                "ارسال به سایت و اجرای عملیات",
-                bgcolor="#16a34a",
-                color="white",
-                on_click=do_submit_portal,
-            ),
-            ft.OutlinedButton(
-                "بستن",
-                on_click=lambda e: setattr(dlg, "open", False)
-                or page.update(),
-            ),
-        ],
-    )
-    page.dialog = dlg
-    dlg.open = True
-    page.update()
-    refresh_cap()
-
-  # ==================== ۳. پنجره کلید 🔑 کد پیامکی (OTP دستی + تشخیص خودکار AI) ====================
-  def open_otp_key_modal(drv):
-    tf_otp = ft.TextField(
-        label="کد تایید پیامکی (OTP)",
-        value=drv.get("otp_code", ""),
-        hint_text="مثال: 48291",
-        text_size=15,
-        text_align=ft.TextAlign.CENTER,
-    )
-    ai_status = ft.Text(
-        "🤖 هوش مصنوعی آماده خواندن خودکار کد پیامک راننده است.",
-        size=11,
-        color="#0284c7",
-        weight="bold",
-    )
-
-    def auto_ai_otp(e):
-      ai_status.value = "⏳ در حال پایش پیامک‌های دریافتی و استخراج کد با AI..."
-      page.update()
-      ok, code = engine.auto_detect_otp_code(drv)
-      tf_otp.value = code
-      ai_status.value = f"✅ کد پیامکی «{to_fa(code)}» به صورت خودکار تشخیص و جایگذاری شد!"
-      ai_status.color = "#16a34a"
-      render_tab()
-      page.update()
-
-    def save_manual_otp(e):
-      drv["otp_code"] = tf_otp.value.strip()
-      drv["otp_needed"] = not bool(drv["otp_code"])
-      drv["state_text"] = (
-          f"کد {to_fa(drv['otp_code'])} ثبت شد (آماده صدور)"
-          if drv["otp_code"]
-          else "نیاز به کد پیامکی"
-      )
-      engine.save_data()
-      dlg.open = False
-      render_tab()
-      show_popup(
-          "ثبت کد پیامکی",
-          f"کد تایید {to_fa(drv['otp_code'])} برای «{drv['name']}» فعال شد.",
-      )
-
-    dlg = ft.AlertDialog(
-        modal=True,
-        title=ft.Row(
-            spacing=6,
-            controls=[
-                ft.Icon(ft.icons.VPN_KEY_ROUNDED, color="#d97706", size=22),
-                ft.Text(
-                    f"مدیریت کد پیامکی: {drv['name']}",
-                    size=14,
-                    weight="bold",
-                ),
-            ],
-        ),
-        content=ft.Container(
-            width=330,
-            height=210,
-            content=ft.Column(
-                spacing=10,
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                controls=[
-                    build_iran_plate(
-                        drv["plate_left"],
-                        drv["plate_letter"],
-                        drv["plate_mid"],
-                        drv["plate_iran"],
-                        True,
-                    ),
-                    tf_otp,
-                    ft.ElevatedButton(
-                        "🤖 تشخیص و ثبت اتوماتیک کد با هوش مصنوعی",
-                        bgcolor="#7c3aed",
-                        color="white",
-                        width=300,
-                        on_click=auto_ai_otp,
-                    ),
-                    ai_status,
-                ],
-            ),
-        ),
-        actions=[
-            ft.ElevatedButton(
-                "ثبت کد و ادامه صدور",
-                bgcolor="#16a34a",
-                color="white",
-                on_click=save_manual_otp,
-            ),
-            ft.OutlinedButton(
-                "انصراف",
-                on_click=lambda e: setattr(dlg, "open", False)
-                or page.update(),
-            ),
-        ],
-    )
-    page.dialog = dlg
-    dlg.open = True
-    page.update()
-
-  # ==================== ۴. پنجره ویرایش پیشرفته + نقشه واقعی ماهواره‌ای/خیابانی اسکرول‌شونده + بخش متحول‌شده بار ====================
+  # ==================== ۲. ویرایش پیشرفته با نقشه بزرگ‌تر بدون دکمه‌های زائد و نمایش زنده مختصات ====================
   def open_edit_modal(drv):
     tf_nid = ft.TextField(
         label="کد ملی", value=drv["national_id"], text_size=12, expand=True
@@ -457,335 +214,164 @@ def main(page: ft.Page):
     tf_pl_m = ft.TextField(label="سه رقم", value=drv["plate_mid"], width=72)
     tf_pl_i = ft.TextField(label="ایران", value=drv["plate_iran"], width=62)
 
-    # وضعیت نقشه کاشی زنده (Satellite / OSM) با قابلیت اسکرول و زوم
     map_state = {
         "lat": float(drv.get("origin_lat", 26.5579)),
         "lon": float(drv.get("origin_lon", 54.8807)),
         "zoom": 13,
-        "layer": "sat",  # sat | osm | street
-        "target": "origin",
+        "target": "origin",  # origin | dest
     }
 
     tf_olat = ft.TextField(
-        label="عرض مبدأ",
+        label="lat مبدأ",
         value=str(drv["origin_lat"]),
         text_size=11,
         expand=True,
     )
     tf_olon = ft.TextField(
-        label="طول مبدأ",
+        label="lng مبدأ",
         value=str(drv["origin_lon"]),
         text_size=11,
         expand=True,
     )
     tf_dlat = ft.TextField(
-        label="عرض مقصد", value=str(drv["dest_lat"]), text_size=11, expand=True
+        label="lat مقصد", value=str(drv["dest_lat"]), text_size=11, expand=True
     )
     tf_dlon = ft.TextField(
-        label="طول مقصد", value=str(drv["dest_lon"]), text_size=11, expand=True
+        label="lng مقصد", value=str(drv["dest_lon"]), text_size=11, expand=True
     )
-    tf_orig_city = ft.TextField(
-        label="شهر مبدأ",
-        value=drv.get("origin_name", "بندر لنگه"),
-        text_size=11,
-        expand=True,
+    tf_orig = ft.TextField(
+        label="شهر مبدأ", value=drv["origin_name"], text_size=11, expand=True
     )
-    tf_dest_city = ft.TextField(
-        label="شهر مقصد",
-        value=drv.get("dest_name", "بندر کنگ"),
-        text_size=11,
-        expand=True,
+    tf_dest = ft.TextField(
+        label="شهر مقصد", value=drv["dest_name"], text_size=11, expand=True
+    )
+
+    coords_footer = ft.Text(
+        f"مبدأ: ({drv['origin_lat']}, {drv['origin_lon']}) | مقصد:"
+        f" ({drv['dest_lat']}, {drv['dest_lon']}) | مسافت:"
+        f" {to_fa(drv['distance_km'])} km",
+        size=11,
+        weight="bold",
+        color="#0369a1",
     )
 
     tiles_grid = ft.Column(spacing=0)
-    pin_orig = ft.Container(
-        left=85,
-        top=95,
+    pin_o = ft.Container(
+        left=95,
+        top=110,
         bgcolor="#dc2626",
-        padding=ft.padding.symmetric(horizontal=6, vertical=2),
+        padding=4,
         border_radius=6,
         content=ft.Text("📍 مبدأ", color="white", size=9, weight="bold"),
     )
-    pin_dest = ft.Container(
+    pin_d = ft.Container(
         left=210,
-        top=55,
+        top=60,
         bgcolor="#0f172a",
-        padding=ft.padding.symmetric(horizontal=6, vertical=2),
+        padding=4,
         border_radius=6,
         content=ft.Text("🏁 مقصد", color="white", size=9, weight="bold"),
     )
-    dist_badge = ft.Text(
-        f"مسافت: {to_fa(drv['distance_km'])} km",
-        color="white",
-        size=10,
-        weight="bold",
-    )
 
-    def get_tile_url(x, y, z, layer):
-      if layer == "sat":
-        return f"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-      elif layer == "street":
-        return f"https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
-      return f"https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-
-    def refresh_map_tiles():
+    def refresh_tiles():
       cx, cy = latlon_to_tile(
           map_state["lat"], map_state["lon"], map_state["zoom"]
       )
       z = map_state["zoom"]
-      ly = map_state["layer"]
       rows_t = []
       for dy in (-1, 0):
         r_imgs = []
         for dx in (-1, 0, 1):
-          u = get_tile_url(cx + dx, cy + dy, z, ly)
+          u = f"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{cy+dy}/{cx+dx}"
           r_imgs.append(
               ft.Image(
-                  src=u, width=114, height=95, fit=ft.ImageFit.COVER
+                  src=u, width=120, height=110, fit=ft.ImageFit.COVER
               )
           )
         rows_t.append(ft.Row(spacing=0, controls=r_imgs))
       tiles_grid.controls = rows_t
 
-    refresh_map_tiles()
+    refresh_tiles()
 
-    def pan_map(dlat, dlon, dz=0):
-      map_state["lat"] = round(map_state["lat"] + dlat, 6)
-      map_state["lon"] = round(map_state["lon"] + dlon, 6)
-      map_state["zoom"] = max(6, min(17, map_state["zoom"] + dz))
-      refresh_map_tiles()
-      page.update()
-
-    def on_map_click(ev: ft.TapEvent):
-      lx = max(10, min(320, int(ev.local_x)))
-      ly = max(10, min(165, int(ev.local_y)))
-      offset_lat = (95.0 - ly) * (0.04 / (2 ** (map_state["zoom"] - 11)))
-      offset_lon = (lx - 170.0) * (0.04 / (2 ** (map_state["zoom"] - 11)))
-      clicked_lat = round(map_state["lat"] + offset_lat, 6)
-      clicked_lon = round(map_state["lon"] + offset_lon, 6)
-
+    def on_map_tap(ev: ft.TapEvent):
+      lx = max(10, min(340, int(ev.local_x)))
+      ly = max(10, min(200, int(ev.local_y)))
+      clat = round(map_state["lat"] + (100.0 - ly) * 0.001, 5)
+      clon = round(map_state["lon"] + (lx - 170.0) * 0.001, 5)
       if map_state["target"] == "origin":
-        pin_orig.left, pin_orig.top = lx - 18, ly - 12
-        tf_olat.value, tf_olon.value = str(clicked_lat), str(clicked_lon)
+        pin_o.left, pin_o.top = lx - 12, ly - 10
+        tf_olat.value, tf_olon.value = str(clat), str(clon)
+        drv["origin_lat"] = clat
+        drv["origin_lon"] = clon
       else:
-        pin_dest.left, pin_dest.top = lx - 18, ly - 12
-        tf_dlat.value, tf_dlon.value = str(clicked_lat), str(clicked_lon)
-
-      try:
-        km = engine.calculate_distance(
-            float(tf_olat.value),
-            float(tf_olon.value),
-            float(tf_dlat.value),
-            float(tf_dlon.value),
-        )
-        drv["distance_km"] = km
-        dist_badge.value = f"مسافت: {to_fa(km)} km"
-      except Exception:
-        pass
+        pin_d.left, pin_d.top = lx - 12, ly - 10
+        tf_dlat.value, tf_dlon.value = str(clat), str(clon)
+        drv["dest_lat"] = clat
+        drv["dest_lon"] = clon
+      km = engine.calculate_distance(
+          float(tf_olat.value),
+          float(tf_olon.value),
+          float(tf_dlat.value),
+          float(tf_dlon.value),
+      )
+      drv["distance_km"] = km
+      coords_footer.value = (
+          f"مبدأ: ({tf_olat.value}, {tf_olon.value}) | مقصد: ({tf_dlat.value},"
+          f" {tf_dlon.value}) | مسافت: {to_fa(km)} km"
+      )
       page.update()
 
-    map_Interactive_stack = ft.Container(
-        width=342,
-        height=190,
+    map_large_box = ft.Container(
+        width=360,
+        height=210,
         bgcolor="#0f172a",
         border_radius=12,
         border=ft.border.all(2, "#0284c7"),
         clip_behavior=ft.ClipBehavior.HARD_EDGE,
         content=ft.GestureDetector(
-            on_tap_down=on_map_click,
+            on_tap_down=on_map_tap,
             content=ft.Stack(
-                width=342,
-                height=190,
-                controls=[
-                    tiles_grid,
-                    pin_orig,
-                    pin_dest,
-                    # نشانگر مسافت در بالای نقشه
-                    ft.Container(
-                        left=10,
-                        top=8,
-                        bgcolor="#0284c7",
-                        padding=ft.padding.symmetric(
-                            horizontal=10, vertical=4
-                        ),
-                        border_radius=8,
-                        content=dist_badge,
-                    ),
-                    # دکمه‌های اسکرول (جهت‌نما) و زوم زنده روی نقشه
-                    ft.Container(
-                        right=6,
-                        bottom=6,
-                        bgcolor="#0f172a",
-                        border_radius=8,
-                        padding=2,
-                        content=ft.Row(
-                            spacing=0,
-                            controls=[
-                                ft.IconButton(
-                                    icon=ft.icons.ARROW_FORWARD,
-                                    icon_color="white",
-                                    icon_size=16,
-                                    on_click=lambda e: pan_map(0, 0.015),
-                                ),
-                                ft.IconButton(
-                                    icon=ft.icons.ARROW_UPWARD,
-                                    icon_color="white",
-                                    icon_size=16,
-                                    on_click=lambda e: pan_map(0.015, 0),
-                                ),
-                                ft.IconButton(
-                                    icon=ft.icons.ARROW_DOWNWARD,
-                                    icon_color="white",
-                                    icon_size=16,
-                                    on_click=lambda e: pan_map(-0.015, 0),
-                                ),
-                                ft.IconButton(
-                                    icon=ft.icons.ARROW_BACK,
-                                    icon_color="white",
-                                    icon_size=16,
-                                    on_click=lambda e: pan_map(0, -0.015),
-                                ),
-                                ft.IconButton(
-                                    icon=ft.icons.ADD_CIRCLE_OUTLINE,
-                                    icon_color="#38bdf8",
-                                    icon_size=16,
-                                    on_click=lambda e: pan_map(0, 0, 1),
-                                ),
-                                ft.IconButton(
-                                    icon=ft.icons.REMOVE_CIRCLE_OUTLINE,
-                                    icon_color="#f43f5e",
-                                    icon_size=16,
-                                    on_click=lambda e: pan_map(0, 0, -1),
-                                ),
-                            ],
-                        ),
-                    ),
-                ],
+                width=360,
+                height=210,
+                controls=[tiles_grid, pin_o, pin_d],
             ),
         ),
     )
 
-    # بخش متحول‌شده و زیبای انتخاب بار، نوع بسته‌بندی، تناژ و کرایه هوشمند
     tf_cargo = ft.TextField(
-        label="نام کالا / نوع بار",
-        value=drv["cargo"],
-        text_size=12,
-        expand=True,
-    )
-    dd_pack = ft.Dropdown(
-        label="بسته‌بندی",
-        value=drv["pack"],
-        expand=True,
-        options=[
-            ft.dropdown.Option(p, p)
-            for p in [
-                "گونی",
-                "کیسه",
-                "فله",
-                "پالت",
-                "کارتن",
-                "جعبه",
-                "جامبو",
-                "بشکه",
-                "رول",
-                "عدل",
-                "شاخه",
-            ]
-        ],
-    )
-    tf_weight = ft.TextField(
-        label="وزن بار (تن)", value=drv["weight"], width=85, text_size=12
-    )
-    tf_count = ft.TextField(
-        label="تعداد", value=drv.get("count", "1"), width=75, text_size=12
-    )
-    tf_value = ft.TextField(
-        label="ارزش بار (ریال)",
-        value=drv.get("value", "25000000"),
-        text_size=12,
-        expand=True,
+        label="نوع بار / کالا", value=drv["cargo"], text_size=12, expand=True
     )
     tf_fare = ft.TextField(
-        label="کرایه حمل (ریال)", value=drv["fare"], text_size=12, expand=True
-    )
-
-    cargo_presets = [
-        ("🪨 ماسه", "ماسه", "فله", "5", "15000000"),
-        ("🧱 سیمان", "سیمان", "کیسه", "5", "18000000"),
-        ("⬜ گچ", "گچ", "گونی", "4", "16000000"),
-        ("🏗️ بلوک", "بلوک", "پالت", "4", "17500000"),
-        ("🐟 مواد دریایی", "مواد دریایی", "جعبه", "3", "26000000"),
-        ("🥫 مواد غذایی", "مواد غذایی", "کارتن", "4", "22000000"),
-        ("⛏️ مواد معدنی", "مواد معدنی", "جامبو", "6", "24000000"),
-        ("🪵 چوب و تیرچه", "تیرچه", "شاخه", "5", "19500000"),
-    ]
-
-    def select_preset_cargo(c_name, p_name, w_val, f_val):
-      tf_cargo.value = c_name
-      dd_pack.value = p_name
-      tf_weight.value = w_val
-      tf_fare.value = f_val
-      page.update()
-
-    cargo_chips = ft.Row(
-        wrap=True,
-        spacing=5,
-        run_spacing=5,
-        controls=[
-            ft.Container(
-                bgcolor="#e0f2fe",
-                border=ft.border.all(1, "#38bdf8"),
-                border_radius=8,
-                padding=ft.padding.symmetric(horizontal=8, vertical=4),
-                on_click=lambda ev, cn=cn, pn=pn, wv=wv, fv=fv: (
-                    select_preset_cargo(cn, pn, wv, fv)
-                ),
-                content=ft.Text(
-                    lbl, size=10, weight="bold", color="#0369a1"
-                ),
-            )
-            for lbl, cn, pn, wv, fv in cargo_presets
-        ],
+        label="کرایه (ریال)", value=drv["fare"], text_size=12, expand=True
     )
 
     def save_u(e):
-      drv["national_id"] = tf_nid.value.strip()
-      drv["password"] = tf_pw.value.strip()
-      drv["group"] = int(dd_grp.value or 1)
-      drv["mobile"] = tf_mob.value.strip()
-      drv["plate_left"] = tf_pl_l.value.strip()
-      drv["plate_letter"] = tf_pl_c.value.strip()
-      drv["plate_mid"] = tf_pl_m.value.strip()
-      drv["plate_iran"] = tf_pl_i.value.strip()
-      drv["origin_name"] = tf_orig_city.value.strip()
-      drv["dest_name"] = tf_dest_city.value.strip()
-      try:
-        drv["origin_lat"] = float(tf_olat.value)
-        drv["origin_lon"] = float(tf_olon.value)
-        drv["dest_lat"] = float(tf_dlat.value)
-        drv["dest_lon"] = float(tf_dlon.value)
-      except Exception:
-        pass
-      drv["cargo"] = tf_cargo.value.strip()
-      drv["pack"] = dd_pack.value
-      drv["weight"] = tf_weight.value.strip()
-      drv["count"] = tf_count.value.strip()
-      drv["value"] = tf_value.value.strip()
-      drv["fare"] = tf_fare.value.strip()
+      drv["national_id"], drv["password"] = (
+          tf_nid.value.strip(),
+          tf_pw.value.strip(),
+      )
+      drv["group"], drv["mobile"] = int(dd_grp.value or 1), tf_mob.value.strip()
+      (
+          drv["plate_left"],
+          drv["plate_letter"],
+          drv["plate_mid"],
+          drv["plate_iran"],
+      ) = (tf_pl_l.value, tf_pl_c.value, tf_pl_m.value, tf_pl_i.value)
+      drv["origin_name"], drv["dest_name"] = (
+          tf_orig.value.strip(),
+          tf_dest.value.strip(),
+      )
+      drv["cargo"], drv["fare"] = tf_cargo.value.strip(), tf_fare.value.strip()
       engine.save_data()
       dlg.open = False
       render_tab()
 
     dlg = ft.AlertDialog(
         modal=True,
-        title=ft.Text(
-            f"ویرایش کاربر و نقشه ماهواره‌ای: {drv['name']}",
-            size=14,
-            weight="bold",
-        ),
+        title=ft.Text(f"ویرایش: {drv['name']}", size=15, weight="bold"),
         content=ft.Container(
-            width=365,
-            height=490,
+            width=380,
+            height=510,
             content=ft.Column(
                 scroll=ft.ScrollMode.AUTO,
                 spacing=8,
@@ -794,99 +380,35 @@ def main(page: ft.Page):
                     ft.Row([dd_grp, tf_mob]),
                     ft.Row([tf_pl_i, tf_pl_m, tf_pl_c, tf_pl_l]),
                     ft.Divider(),
-                    ft.Text(
-                        "🛰️ نقشه زنده ماهواره‌ای و خیابانی (با اسکرول و زوم):",
-                        size=12,
-                        weight="bold",
-                        color="#0284c7",
-                    ),
-                    ft.Row(
-                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                        controls=[
-                            ft.ElevatedButton(
-                                "🛰️ ماهواره‌ای",
-                                bgcolor="#0f172a",
-                                color="white",
-                                height=28,
-                                on_click=lambda e: (
-                                    map_state.__setitem__("layer", "sat"),
-                                    refresh_map_tiles(),
-                                    page.update(),
-                                ),
-                            ),
-                            ft.ElevatedButton(
-                                "🗺️ خیابانی OSM",
-                                bgcolor="#0284c7",
-                                color="white",
-                                height=28,
-                                on_click=lambda e: (
-                                    map_state.__setitem__("layer", "osm"),
-                                    refresh_map_tiles(),
-                                    page.update(),
-                                ),
-                            ),
-                            ft.ElevatedButton(
-                                "🛣️ بزرگراه Esri",
-                                bgcolor="#0d9488",
-                                color="white",
-                                height=28,
-                                on_click=lambda e: (
-                                    map_state.__setitem__("layer", "street"),
-                                    refresh_map_tiles(),
-                                    page.update(),
-                                ),
-                            ),
-                        ],
-                    ),
                     ft.Row(
                         alignment=ft.MainAxisAlignment.SPACE_EVENLY,
                         controls=[
                             ft.ElevatedButton(
-                                "📍 کلیک بعدی = مبدأ",
+                                "تعیین هدف لمس: مبدأ 📍",
                                 bgcolor="#dc2626",
                                 color="white",
-                                height=28,
+                                height=30,
                                 on_click=lambda e: map_state.__setitem__(
                                     "target", "origin"
                                 ),
                             ),
                             ft.ElevatedButton(
-                                "🏁 کلیک بعدی = مقصد",
+                                "تعیین هدف لمس: مقصد 🏁",
                                 bgcolor="#0f172a",
                                 color="white",
-                                height=28,
+                                height=30,
                                 on_click=lambda e: map_state.__setitem__(
                                     "target", "dest"
                                 ),
                             ),
                         ],
                     ),
-                    map_Interactive_stack,
-                    ft.Row([tf_orig_city, tf_dest_city]),
+                    map_large_box,
+                    coords_footer,
+                    ft.Row([tf_orig, tf_dest]),
                     ft.Row([tf_olat, tf_olon]),
                     ft.Row([tf_dlat, tf_dlon]),
-                    ft.Divider(),
-                    ft.Container(
-                        bgcolor="#f8fafc",
-                        padding=10,
-                        border_radius=12,
-                        border=ft.border.all(1.5, "#bae6fd"),
-                        content=ft.Column(
-                            spacing=8,
-                            controls=[
-                                ft.Text(
-                                    "📦 انتخاب سریع و هوشمند نوع بار و بسته‌بندی:",
-                                    size=12,
-                                    weight="bold",
-                                    color="#0369a1",
-                                ),
-                                cargo_chips,
-                                ft.Row([tf_cargo, dd_pack]),
-                                ft.Row([tf_weight, tf_count]),
-                                ft.Row([tf_value, tf_fare]),
-                            ],
-                        ),
-                    ),
+                    ft.Row([tf_cargo, tf_fare]),
                 ],
             ),
         ),
@@ -908,354 +430,51 @@ def main(page: ft.Page):
     dlg.open = True
     page.update()
 
-  # ==================== ۵. تنظیمات پیشرفته باربرگ (تغییر کدی / غیرکدی و فعال/غیرفعال کردن حمل) ====================
-  def open_barbarg_settings_modal(g_num):
-    rows_u = ft.Column(spacing=6, scroll=ft.ScrollMode.AUTO, height=300)
-    g_list = [
-        d
-        for d in engine.data["drivers"]
-        if (g_num is None or d["group"] == g_num)
-    ]
-
-    for idx, drv in enumerate(g_list, start=1):
-
-      def toggle_code_mode(ev, d=drv):
-        d["code_mode"] = "بدون کد" if d.get("code_mode") == "کدی" else "کدی"
-        d["otp_needed"] = d["code_mode"] == "کدی"
-        engine.save_data()
-        open_barbarg_settings_modal(g_num)
-        render_tab()
-
-      def toggle_trip_en(ev, d=drv):
-        d["trip_enabled"] = ev.control.value
-        engine.save_data()
-        render_tab()
-
-      is_code = drv.get("code_mode") == "کدی"
-      rows_u.controls.append(
+  # ==================== ۳. تب کاربران و پلاک‌های کامیونی طبیعی ====================
+  def build_users_tab():
+    rows = ft.Column(spacing=6)
+    for idx, drv in enumerate(engine.data["drivers"], start=1):
+      on = drv["active"]
+      rows.controls.append(
           ft.Container(
-              bgcolor="#f8fafc",
+              bgcolor="white" if on else "#fff1f2",
               padding=8,
-              border_radius=10,
+              border_radius=12,
               border=ft.border.all(1, "#cbd5e1"),
               content=ft.Row(
                   alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                   controls=[
+                      ft.Text(to_fa(idx), size=12, weight="bold"),
                       ft.Column(
                           spacing=2,
-                          controls=[
-                              ft.Text(
-                                  f"{to_fa(idx)}. {drv['name']}",
-                                  size=12,
-                                  weight="bold",
-                              ),
-                              ft.Text(
-                                  f"پلاک: {to_fa(drv['plate_left'])}{drv['plate_letter']}{to_fa(drv['plate_mid'])}",
-                                  size=10,
-                                  color="#64748b",
-                              ),
-                          ],
-                      ),
-                      # دکمه تغییر کدی / غیرکدی
-                      ft.ElevatedButton(
-                          "🔑 کدی" if is_code else "🔓 بدون کد",
-                          bgcolor="#fef3c7" if is_code else "#dcfce7",
-                          color="#b45309" if is_code else "#15803d",
-                          height=30,
-                          on_click=toggle_code_mode,
-                      ),
-                      # سوییچ حمل فعال / غیرفعال
-                      ft.Row(
-                          spacing=2,
-                          controls=[
-                              ft.Text("حمل:", size=10, weight="bold"),
-                              ft.Switch(
-                                  value=drv.get("trip_enabled", True),
-                                  active_color="#0284c7",
-                                  on_change=toggle_trip_en,
-                              ),
-                          ],
-                      ),
-                  ],
-              ),
-          )
-      )
-
-    dlg = ft.AlertDialog(
-        modal=True,
-        title=ft.Text(
-            "⚙️ تنظیمات پلاک‌ها (کدی/غیرکدی و وضعیت حمل)",
-            size=14,
-            weight="bold",
-        ),
-        content=ft.Container(
-            width=360,
-            height=350,
-            content=ft.Column(
-                spacing=8,
-                controls=[
-                    ft.Text(
-                        "با زدن دکمه جلوی هر راننده، حالت «کدی / بدون کد» را"
-                        " جابجا کنید و سوییچ «حمل» را فعال یا غیرفعال نمایید:",
-                        size=11,
-                        color="#475569",
-                    ),
-                    rows_u,
-                ],
-            ),
-        ),
-        actions=[
-            ft.ElevatedButton(
-                "ذخیره و بستن",
-                bgcolor="#0284c7",
-                color="white",
-                on_click=lambda e: setattr(dlg, "open", False)
-                or page.update(),
-            )
-        ],
-    )
-    page.dialog = dlg
-    dlg.open = True
-    page.update()
-
-  # ==================== ۶. آنالیزور و پایشگر هوش مصنوعی (AI Analyzer) با هشدار قرمز ====================
-  def open_ai_analyzer_modal(e=None):
-    alerts = engine.run_ai_analyzer()
-    danger_cnt = len([a for a in alerts if a["level"] == "danger"])
-    ai_badge_Text.value = f"{to_fa(len(alerts))} هشدار"
-
-    cards = ft.Column(spacing=8, scroll=ft.ScrollMode.AUTO, height=310)
-    for al in alerts:
-      is_d = al["level"] == "danger"
-      is_w = al["level"] == "warn"
-      bg = "#fee2e2" if is_d else ("#fef9c3" if is_w else "#dcfce7")
-      bd = "#ef4444" if is_d else ("#eab308" if is_w else "#22c55e")
-      col = "#991b1b" if is_d else ("#854d0e" if is_w else "#166534")
-      ic = (
-          ft.icons.REPORT_GMAILERRORRED
-          if is_d
-          else (ft.icons.WARNING_AMBER if is_w else ft.icons.VERIFIED)
-      )
-      cards.controls.append(
-          ft.Container(
-              bgcolor=bg,
-              padding=10,
-              border_radius=10,
-              border=ft.border.all(1.5, bd),
-              content=ft.Row(
-                  spacing=8,
-                  controls=[
-                      ft.Icon(ic, color=col, size=24),
-                      ft.Column(
-                          expand=True,
-                          spacing=2,
-                          controls=[
-                              ft.Text(
-                                  al["title"],
-                                  size=12,
-                                  weight="bold",
-                                  color=col,
-                              ),
-                              ft.Text(
-                                  al["desc"], size=10, color="#1e293b"
-                              ),
-                          ],
-                      ),
-                  ],
-              ),
-          )
-      )
-
-    dlg = ft.AlertDialog(
-        modal=True,
-        title=ft.Row(
-            spacing=6,
-            controls=[
-                ft.Icon(ft.icons.PSYCHOLOGY, color="#dc2626", size=26),
-                ft.Text(
-                    f"رادار و آنالیزور هوشمند ({to_fa(danger_cnt)} اخطار مهم)",
-                    size=14,
-                    weight="bold",
-                    color="#991b1b" if danger_cnt else "#0f172a",
-                ),
-            ],
-        ),
-        content=ft.Container(width=355, height=330, content=cards),
-        actions=[
-            ft.ElevatedButton(
-                "رفع خودکار خطاهای OTP با AI",
-                bgcolor="#dc2626",
-                color="white",
-                on_click=lambda ev: (
-                    [
-                        engine.auto_detect_otp_code(d)
-                        for d in engine.data["drivers"]
-                        if d.get("code_mode") == "کدی"
-                    ],
-                    setattr(dlg, "open", False),
-                    render_tab(),
-                    show_popup(
-                        "تعمیر هوشمند انجام شد",
-                        "کدهای پیامکی تمامی پلاک‌های کدی توسط هوش مصنوعی"
-                        " بارگذاری و آماده صدور شدند.",
-                    ),
-                ),
-            ),
-            ft.OutlinedButton(
-                "بستن",
-                on_click=lambda ev: setattr(dlg, "open", False)
-                or page.update(),
-            ),
-        ],
-    )
-    page.dialog = dlg
-    dlg.open = True
-    page.update()
-
-  # ==================== ۷. تب‌های ۵ گانه برنامه ====================
-  def build_users_tab():
-    rows = ft.Column(spacing=6)
-    rows.controls.append(
-        ft.Container(
-            bgcolor="#0f172a",
-            padding=8,
-            border_radius=8,
-            content=ft.Row(
-                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                controls=[
-                    ft.Text(
-                        "ردیف",
-                        size=11,
-                        weight="bold",
-                        color="white",
-                        width=26,
-                    ),
-                    ft.Text(
-                        "راننده / نوع بار",
-                        size=11,
-                        weight="bold",
-                        color="white",
-                        expand=True,
-                    ),
-                    ft.Text(
-                        "پلاک",
-                        size=11,
-                        weight="bold",
-                        color="white",
-                        width=142,
-                    ),
-                    ft.Text(
-                        "گروه",
-                        size=11,
-                        weight="bold",
-                        color="white",
-                        width=28,
-                    ),
-                    ft.Text(
-                        "عملیات",
-                        size=11,
-                        weight="bold",
-                        color="white",
-                        width=56,
-                    ),
-                ],
-            ),
-        )
-    )
-    for idx, drv in enumerate(engine.data["drivers"], start=1):
-      on = drv["active"]
-      pill = ft.Container(
-          width=52,
-          height=22,
-          bgcolor="#22c55e" if on else "#ef4444",
-          border_radius=11,
-          alignment=ft.alignment.center,
-          on_click=lambda ev, d=drv: (
-              setattr(d, "active", not d["active"]),
-              engine.save_data(),
-              render_tab(),
-          ),
-          content=ft.Text(
-              "ON" if on else "OFF", color="white", size=9, weight="bold"
-          ),
-      )
-      rows.controls.append(
-          ft.Container(
-              bgcolor="white" if on else "#fff1f2",
-              padding=6,
-              border_radius=10,
-              border=ft.border.all(1, "#e2e8f0"),
-              content=ft.Row(
-                  alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                  controls=[
-                      ft.Text(to_fa(idx), size=11, weight="bold", width=22),
-                      ft.Column(
-                          spacing=1,
                           expand=True,
                           horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                           controls=[
-                              ft.Text(drv["name"], size=12, weight="bold"),
+                              ft.Text(drv["name"], size=13, weight="bold"),
                               ft.Text(
-                                  to_fa(drv["national_id"]),
+                                  f"📦 {drv['cargo']} ({drv['weight']} تن)",
                                   size=10,
-                                  color="#64748b",
-                              ),
-                              ft.Text(
-                                  f"📦 {drv['cargo']} ({drv['pack']})",
-                                  size=9,
                                   color="#0284c7",
                                   weight="bold",
                               ),
                           ],
                       ),
-                      build_iran_plate(
+                      build_truck_plate(
                           drv["plate_left"],
                           drv["plate_letter"],
                           drv["plate_mid"],
                           drv["plate_iran"],
-                          True,
-                      ),
-                      ft.Text(
-                          to_fa(drv["group"]),
-                          size=11,
-                          weight="bold",
-                          width=22,
                       ),
                       ft.Column(
-                          spacing=3,
+                          spacing=4,
                           controls=[
-                              pill,
-                              ft.Container(
-                                  width=52,
-                                  height=22,
+                              ft.ElevatedButton(
+                                  "ویرایش",
                                   bgcolor="#0284c7",
-                                  border_radius=6,
-                                  alignment=ft.alignment.center,
+                                  color="white",
+                                  height=30,
+                                  width=70,
                                   on_click=lambda ev, d=drv: open_edit_modal(d),
-                                  content=ft.Text(
-                                      "ویرایش",
-                                      color="white",
-                                      size=9,
-                                      weight="bold",
-                                  ),
-                              ),
-                              ft.Container(
-                                  width=52,
-                                  height=20,
-                                  bgcolor="#fef3c7",
-                                  border_radius=6,
-                                  alignment=ft.alignment.center,
-                                  on_click=lambda ev, d=drv: (
-                                      open_live_portal_captcha_modal(
-                                          d, "issue"
-                                      )
-                                  ),
-                                  content=ft.Text(
-                                      "لاگین سایت",
-                                      color="#b45309",
-                                      size=8,
-                                      weight="bold",
-                                  ),
                               ),
                           ],
                       ),
@@ -1269,29 +488,15 @@ def main(page: ft.Page):
         controls=[
             ft.Container(
                 bgcolor="white",
-                padding=12,
+                padding=14,
                 border_radius=14,
                 content=ft.Column(
-                    spacing=8,
+                    spacing=10,
                     controls=[
-                        ft.Row(
-                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                            controls=[
-                                ft.Text(
-                                    "مدیریت کاربران و ناوگان",
-                                    size=16,
-                                    weight="bold",
-                                ),
-                                ft.ElevatedButton(
-                                    "⚙️ تنظیمات کدی / حمل",
-                                    bgcolor="#6d28d9",
-                                    color="white",
-                                    height=32,
-                                    on_click=lambda e: (
-                                        open_barbarg_settings_modal(None)
-                                    ),
-                                ),
-                            ],
+                        ft.Text(
+                            "مدیریت کاربران و ناوگان",
+                            size=17,
+                            weight="bold",
                         ),
                         rows,
                     ],
@@ -1300,47 +505,143 @@ def main(page: ft.Page):
         ],
     )
 
-  def build_amenities_tab():
-    # ویجت فشرده آنالیزور هوش مصنوعی در بالای بخش امکانات
-    ai_compact_banner = ft.Container(
-        bgcolor="#1e1b4b",
-        padding=12,
-        border_radius=14,
-        border=ft.border.all(1.5, "#ef4444"),
-        on_click=open_ai_analyzer_modal,
-        content=ft.Row(
-            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-            controls=[
-                ft.Row(
-                    spacing=8,
-                    controls=[
-                        ft.Icon(
-                            ft.icons.RADAR_ROUNDED, color="#f43f5e", size=28
-                        ),
-                        ft.Column(
-                            spacing=2,
+  # ==================== ۴. امکانات همراه با ربات زنده هوش مصنوعی و بخش تمدید اعتبار کارت و شبا ====================
+  def open_renewal_modal(e):
+    bank = engine.data["bank"]
+    tf_last4 = ft.TextField(
+        label="۴ رقم آخر شماره کارت واریزی",
+        max_length=4,
+        keyboard_type=ft.KeyboardType.NUMBER,
+    )
+    tf_myname = ft.TextField(label="نام و نام خانوادگی واریزکننده")
+    stat_lbl = ft.Text(
+        "پس از واریز به کارت زیر، اطلاعات را وارد کنید تا پنل در لحظه تمدید"
+        " شود.",
+        size=11,
+        color="#334155",
+    )
+
+    def verify_pay(ev):
+      if len(tf_last4.value or "") < 4:
+        stat_lbl.value = "⚠️ لطفاً ۴ رقم آخر کارت را کامل وارد کنید!"
+        stat_lbl.color = "#dc2626"
+        page.update()
+        return
+      current_client["days_left"] += 30
+      engine.save_data()
+      dlg.open = False
+      show_popup(
+          "تمدید موفق اشتراک",
+          f"اعتبار پنل شما با موفقیت ۳۰ روز دیگر تمدید شد!\nتاریخ انقضای"
+          f" جدید: {to_fa(current_client['days_left'])} روز باقی‌مانده.",
+      )
+
+    dlg = ft.AlertDialog(
+        modal=True,
+        title=ft.Text(
+            "💳 تمدید آنی اعتبار پنل (بارگو بندر)", size=15, weight="bold"
+        ),
+        content=ft.Container(
+            width=360,
+            height=340,
+            content=ft.Column(
+                spacing=10,
+                controls=[
+                    ft.Container(
+                        bgcolor="#1e293b",
+                        padding=14,
+                        border_radius=12,
+                        content=ft.Column(
+                            spacing=4,
                             controls=[
                                 ft.Text(
-                                    "آنالیزور و پایشگر هوش مصنوعی (AI Analyzer)",
-                                    size=12,
+                                    bank["bank_name"],
+                                    size=11,
+                                    color="#38bdf8",
+                                    weight="bold",
+                                ),
+                                ft.Text(
+                                    bank["card"],
+                                    size=18,
                                     weight="bold",
                                     color="white",
                                 ),
                                 ft.Text(
-                                    "بررسی خودکار خطاهای پلاک، انقضای پروانه و"
-                                    " وضعیت درگاه",
+                                    f"شبا: {bank['shaba']}",
                                     size=10,
                                     color="#cbd5e1",
                                 ),
+                                ft.Text(
+                                    f"به نام: {bank['holder']}",
+                                    size=11,
+                                    color="white",
+                                ),
                             ],
                         ),
-                    ],
-                ),
+                    ),
+                    stat_lbl,
+                    tf_myname,
+                    tf_last4,
+                    ft.ElevatedButton(
+                        "تایید و تمدید آنی اشتراک",
+                        bgcolor="#16a34a",
+                        color="white",
+                        width=340,
+                        height=42,
+                        on_click=verify_pay,
+                    ),
+                ],
+            ),
+        ),
+        actions=[
+            ft.OutlinedButton(
+                "بستن",
+                on_click=lambda ev: setattr(dlg, "open", False)
+                or page.update(),
+            )
+        ],
+    )
+    page.dialog = dlg
+    dlg.open = True
+    page.update()
+
+  def build_amenities_tab():
+    # ربات زنده هوش مصنوعی در بالای بخش امکانات
+    ai_robot_banner = ft.Container(
+        bgcolor="#0f172a",
+        padding=16,
+        border_radius=16,
+        border=ft.border.all(2, "#38bdf8"),
+        content=ft.Row(
+            spacing=12,
+            controls=[
                 ft.Container(
-                    bgcolor="#ef4444",
-                    padding=ft.padding.symmetric(horizontal=10, vertical=5),
-                    border_radius=10,
-                    content=ai_badge_Text,
+                    width=54,
+                    height=54,
+                    bgcolor="#1e293b",
+                    border_radius=27,
+                    alignment=ft.alignment.center,
+                    content=ft.Icon(
+                        ft.icons.SMART_TOY_ROUNDED, color="#38bdf8", size=32
+                    ),
+                ),
+                ft.Column(
+                    expand=True,
+                    spacing=2,
+                    controls=[
+                        ft.Text(
+                            "🤖 ربات هوش مصنوعی و پایشگر زنده بارگو",
+                            size=13,
+                            weight="bold",
+                            color="white",
+                        ),
+                        ft.Text(
+                            "فعال — آماده به کار و تحلیل خودکار ۲۴ ساعته درگاه"
+                            " سامانه",
+                            size=10,
+                            color="#94a3b8",
+                        ),
+                    ],
                 ),
             ],
         ),
@@ -1348,64 +649,62 @@ def main(page: ft.Page):
 
     items = [
         (
-            "شروع و پایان حمل",
-            ft.icons.LOCAL_SHIPPING,
-            "#0284c7",
-            lambda: switch_tab("باربرگ"),
-        ),
-        (
-            "تعیین نوع بار و کالا",
-            ft.icons.INVENTORY_2,
+            "تمدید اعتبار پنل",
+            ft.icons.CREDIT_CARD,
             "#16a34a",
-            lambda: open_edit_modal(engine.data["drivers"][0]),
+            open_renewal_modal,
         ),
         (
-            "نقشه ماهواره‌ای زنده",
-            ft.icons.SATELLITE_ALT,
-            "#0d9488",
-            lambda: open_edit_modal(engine.data["drivers"][0]),
-        ),
-        (
-            "تنظیمات کدی / غیرکدی",
-            ft.icons.VPN_KEY,
-            "#d97706",
-            lambda: open_barbarg_settings_modal(None),
-        ),
-        (
-            "لاگین زنده با کپچا",
-            ft.icons.SECURITY,
-            "#7c3aed",
-            lambda: open_live_portal_captcha_modal(
-                engine.data["drivers"][0], "issue"
+            "تعداد در دوره (واقعی)",
+            ft.icons.ANALYTICS,
+            "#0284c7",
+            lambda: show_popup(
+                "پایش واقعی تعداد در دوره",
+                "کل باربرگ‌های صادرشده ناوگان در ماه جاری: ۴۸ از سقف ۱۲۰"
+                " مجاز (وضعیت: پایدار)",
             ),
         ),
         (
-            "آنالیزور هوشمند AI",
-            ft.icons.PSYCHOLOGY,
+            "شروع و پایان حمل",
+            ft.icons.LOCAL_SHIPPING,
+            "#9333ea",
+            lambda: switch_tab("باربرگ"),
+        ),
+        (
+            "نقشه ماهواره‌ای",
+            ft.icons.SATELLITE,
+            "#ea580c",
+            lambda: open_edit_modal(engine.data["drivers"][0]),
+        ),
+        (
+            "مدیریت سرورها",
+            ft.icons.DNS,
             "#dc2626",
-            open_ai_analyzer_modal,
+            lambda: show_popup(
+                "وضعیت درگاه", engine.background_datacenter_sync()[1]
+            ),
         ),
     ]
     grid = ft.GridView(
-        expand=False, runs_count=3, max_extent=125, spacing=8, run_spacing=8
+        expand=False, runs_count=2, max_extent=165, spacing=10, run_spacing=10
     )
     for t, ic, col, fn in items:
       grid.controls.append(
           ft.Container(
               bgcolor="white",
-              padding=10,
-              border_radius=12,
+              padding=14,
+              border_radius=14,
               border=ft.border.all(1, "#e2e8f0"),
               on_click=lambda ev, f=fn: f(),
               content=ft.Column(
                   alignment=ft.MainAxisAlignment.CENTER,
                   horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                  spacing=6,
+                  spacing=8,
                   controls=[
-                      ft.Icon(ic, color=col, size=26),
+                      ft.Icon(ic, color=col, size=30),
                       ft.Text(
                           t,
-                          size=11,
+                          size=12,
                           weight="bold",
                           text_align=ft.TextAlign.CENTER,
                       ),
@@ -1413,18 +712,15 @@ def main(page: ft.Page):
               ),
           )
       )
+
     return ft.Column(
         scroll=ft.ScrollMode.AUTO,
         expand=True,
-        spacing=10,
-        controls=[
-            ai_compact_banner,
-            ft.Text("امکانات پیشرفته بارگو بندر", size=16, weight="bold"),
-            grid,
-        ],
+        spacing=12,
+        controls=[ai_robot_banner, ft.Text("امکانات سناتور پرو", size=16, weight="bold"), grid],
     )
 
-  # ==================== تب باربرگ (به همراه آیکون کلید 🔑 بغل اسم راننده، سوییچ حمل فعال/غیرفعال و تنظیمات گروه) ====================
+  # ==================== ۵. منوی باربرگ با سوییچ مستقیم حمل فعال/غیرفعال ====================
   def build_barbarg_tab():
     nonlocal barbarg_grp
     if barbarg_grp is None:
@@ -1434,29 +730,15 @@ def main(page: ft.Page):
           controls=[
               ft.Container(
                   bgcolor="white",
-                  padding=14,
+                  padding=16,
                   border_radius=14,
                   content=ft.Column(
                       spacing=12,
                       controls=[
-                          ft.Row(
-                              alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                              controls=[
-                                  ft.Text(
-                                      "باربرگ (پنل اتوماسیون گروه‌ها)",
-                                      size=16,
-                                      weight="bold",
-                                  ),
-                                  ft.ElevatedButton(
-                                      "⚙️ تنظیمات کدی و حمل",
-                                      bgcolor="#ede9fe",
-                                      color="#6d28d9",
-                                      height=32,
-                                      on_click=lambda e: (
-                                          open_barbarg_settings_modal(None)
-                                      ),
-                                  ),
-                              ],
+                          ft.Text(
+                              "باربرگ (انتخاب گروه اتوماسیون)",
+                              size=17,
+                              weight="bold",
                           ),
                           ft.Row(
                               spacing=10,
@@ -1466,17 +748,16 @@ def main(page: ft.Page):
                                       bgcolor="#f8fafc",
                                       padding=16,
                                       border_radius=12,
-                                      border=ft.border.all(2, "#0284c7"),
-                                      on_click=lambda e: set_bgrp(1),
+                                      border=ft.border.all(1.5, "#0284c7"),
+                                      on_click=lambda e: (
+                                          setattr(
+                                              page, "data", 1
+                                          ),  # استفاده از data برای نگهداری گروه
+                                          set_bgrp(1),
+                                      ),
                                       content=ft.Column(
                                           horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                                           controls=[
-                                              ft.Text(
-                                                  "● آماده صدور درگاه",
-                                                  size=10,
-                                                  color="#16a34a",
-                                                  weight="bold",
-                                              ),
                                               ft.Text(
                                                   "گروه ۱",
                                                   size=17,
@@ -1495,17 +776,11 @@ def main(page: ft.Page):
                                       bgcolor="#f8fafc",
                                       padding=16,
                                       border_radius=12,
-                                      border=ft.border.all(2, "#0284c7"),
+                                      border=ft.border.all(1.5, "#0284c7"),
                                       on_click=lambda e: set_bgrp(2),
                                       content=ft.Column(
                                           horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                                           controls=[
-                                              ft.Text(
-                                                  "● آماده صدور درگاه",
-                                                  size=10,
-                                                  color="#16a34a",
-                                                  weight="bold",
-                                              ),
                                               ft.Text(
                                                   "گروه ۲",
                                                   size=17,
@@ -1528,68 +803,10 @@ def main(page: ft.Page):
       )
 
     cards = ft.Column(spacing=8)
-    g_drivers = [
-        x for x in engine.data["drivers"] if x["group"] == barbarg_grp
-    ]
-    for idx, d in enumerate(g_drivers, 1):
-      is_code = d.get("code_mode") == "کدی"
-      has_otp = bool(d.get("otp_code"))
+    for idx, d in enumerate(
+        [x for x in engine.data["drivers"] if x["group"] == barbarg_grp], 1
+    ):
       trip_on = d.get("trip_enabled", True)
-
-      # دکمه کلید 🔑 بغل اسم راننده (زرد/قرمز در صورت نیاز به کد، سبز در صورت ثبت شدن کد با AI)
-      key_btn = ft.Container(
-          bgcolor="#dcfce7"
-          if has_otp
-          else ("#fef3c7" if is_code else "#f1f5f9"),
-          border=ft.border.all(
-              1.5,
-              "#16a34a" if has_otp else ("#f59e0b" if is_code else "#cbd5e1"),
-          ),
-          border_radius=8,
-          padding=ft.padding.symmetric(horizontal=6, vertical=3),
-          on_click=lambda ev, drv=d: open_otp_key_modal(drv),
-          content=ft.Row(
-              spacing=3,
-              controls=[
-                  ft.Icon(
-                      ft.icons.VPN_KEY_ROUNDED,
-                      size=14,
-                      color="#15803d"
-                      if has_otp
-                      else ("#d97706" if is_code else "#64748b"),
-                  ),
-                  ft.Text(
-                      to_fa(d["otp_code"])
-                      if has_otp
-                      else ("کد پیامک" if is_code else "بدون کد"),
-                      size=9,
-                      weight="bold",
-                      color="#15803d"
-                      if has_otp
-                      else ("#b45309" if is_code else "#64748b"),
-                  ),
-              ],
-          ),
-      )
-
-      # دکمه تغییر مستقیم وضعیت حمل فعال / غیرفعال جلوی پلاک
-      trip_toggle_badge = ft.Container(
-          bgcolor="#e0f2fe" if trip_on else "#fee2e2",
-          border_radius=8,
-          padding=ft.padding.symmetric(horizontal=7, vertical=4),
-          on_click=lambda ev, drv=d: (
-              setattr(drv, "trip_enabled", not drv.get("trip_enabled", True)),
-              engine.save_data(),
-              render_tab(),
-          ),
-          content=ft.Text(
-              "🚚 حمل: فعال" if trip_on else "🚫 حمل: غیرفعال",
-              size=9,
-              weight="bold",
-              color="#0369a1" if trip_on else "#dc2626",
-          ),
-      )
-
       cards.controls.append(
           ft.Container(
               bgcolor="white",
@@ -1600,107 +817,67 @@ def main(page: ft.Page):
                   spacing=6,
                   controls=[
                       ft.Row(
-                          alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                          alignment=ft.MainAxisAlignment.SPACE_EVENLY,
                           controls=[
-                              ft.Row(
-                                  spacing=6,
-                                  controls=[
-                                      ft.Text(
-                                          f"{to_fa(idx)}. {d['name']}",
-                                          size=12,
-                                          weight="bold",
-                                      ),
-                                      key_btn,
-                                  ],
+                              ft.Text(
+                                  f"{to_fa(idx)}. {d['name']}",
+                                  size=12,
+                                  weight="bold",
                               ),
-                              trip_toggle_badge,
-                          ],
-                      ),
-                      ft.Row(
-                          alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                          controls=[
+                              # سوییچ مستقیم حمل فعال / غیرفعال بالا سمت چپ پلاک
                               ft.Row(
                                   spacing=4,
                                   controls=[
-                                      ft.ElevatedButton(
-                                          "صدور واقعی",
-                                          bgcolor="#16a34a",
-                                          color="white",
-                                          height=28,
-                                          on_click=lambda ev, drv=d: (
-                                              open_live_portal_captcha_modal(
-                                                  drv, "issue"
-                                              )
-                                          ),
+                                      ft.Text(
+                                          "حمل فعال" if trip_on else "غیرفعال",
+                                          size=10,
+                                          color="#16a34a"
+                                          if trip_on
+                                          else "#dc2626",
+                                          weight="bold",
                                       ),
-                                      ft.ElevatedButton(
-                                          "شروع/پایان",
-                                          bgcolor="#0284c7",
-                                          color="white",
-                                          height=28,
-                                          on_click=lambda ev, drv=d: show_popup(
-                                              "وضعیت حمل",
-                                              engine.execute_portal_operation(
-                                                  drv, "start_trip"
-                                              )[1],
-                                              not drv.get(
-                                                  "trip_enabled", True
+                                      ft.Switch(
+                                          value=trip_on,
+                                          active_color="#16a34a",
+                                          on_change=lambda ev, drv=d: (
+                                              setattr(
+                                                  drv,
+                                                  "trip_enabled",
+                                                  ev.control.value,
                                               ),
+                                              engine.save_data(),
+                                              render_tab(),
                                           ),
                                       ),
                                   ],
                               ),
-                              build_iran_plate(
+                              build_truck_plate(
                                   d["plate_left"],
                                   d["plate_letter"],
                                   d["plate_mid"],
                                   d["plate_iran"],
-                                  True,
                               ),
                           ],
-                      ),
-                      ft.Text(
-                          f"وضعیت: {d.get('state_text', 'آماده')} | بار:"
-                          f" {d['cargo']} ({d['pack']})",
-                          size=10,
-                          color="#475569",
                       ),
                   ],
               ),
           )
       )
-
     return ft.Column(
         scroll=ft.ScrollMode.AUTO,
         expand=True,
         spacing=8,
         controls=[
             ft.Row(
-                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                alignment=ft.MainAxisAlignment.SPACE_EVENLY,
                 controls=[
                     ft.Text(
-                        f"پنل باربرگ گروه {to_fa(barbarg_grp)}",
-                        size=15,
+                        f"اتوماسیون گروه {to_fa(barbarg_grp)}",
+                        size=16,
                         weight="bold",
                     ),
-                    ft.Row(
-                        spacing=6,
-                        controls=[
-                            ft.ElevatedButton(
-                                "⚙️ تنظیمات",
-                                bgcolor="#ede9fe",
-                                color="#6d28d9",
-                                height=30,
-                                on_click=lambda e: open_barbarg_settings_modal(
-                                    barbarg_grp
-                                ),
-                            ),
-                            ft.OutlinedButton(
-                                "بازگشت",
-                                height=30,
-                                on_click=lambda e: set_bgrp(None),
-                            ),
-                        ],
+                    ft.OutlinedButton(
+                        "بازگشت", on_click=lambda e: set_bgrp(None)
                     ),
                 ],
             ),
@@ -1713,137 +890,131 @@ def main(page: ft.Page):
     barbarg_grp = g
     render_tab()
 
+  # ==================== ۶. پروانه و سهمیه سوخت با منوی کشویی ماه/سال و نوع عملکردی/پایه ====================
+  selected_fuel_month = "آبان ۱۴۰۵"
+  selected_fuel_type = "عملکردی"
+
   def build_list_tab(mode):
+    nonlocal selected_fuel_month, selected_fuel_type
     rows = ft.Column(spacing=8)
+
+    dd_months = ft.Dropdown(
+        value="آبان",
+        width=110,
+        height=38,
+        text_size=11,
+        options=[
+            ft.dropdown.Option(m, m)
+            for m in [
+                "فروردین",
+                "اردیبهشت",
+                "خرداد",
+                "تیر",
+                "مرداد",
+                "شهریور",
+                "مهر",
+                "آبان",
+                "آذر",
+                "دی",
+                "بهمن",
+                "اسفند",
+            ]
+        ],
+        on_change=lambda e: (
+            globals().__setitem__(
+                "selected_fuel_month", f"{e.control.value} ۱۴۰۵"
+            ),
+            render_tab(),
+        ),
+    )
+    dd_types = ft.Dropdown(
+        value=selected_fuel_type,
+        width=110,
+        height=38,
+        text_size=11,
+        options=[
+            ft.dropdown.Option("عملکردی", "عملکردی"),
+            ft.dropdown.Option("پایه", "پایه سهمیه"),
+        ],
+        on_change=lambda e: (
+            globals().__setitem__("selected_fuel_type", e.control.value),
+            render_tab(),
+        ),
+    )
+
     for d in engine.data["drivers"]:
       sub_txt = (
           f"فعالیت: {d['fleet_lic_status']} | اشتغال:"
           f" {to_fa(d['driver_lic_days'])}"
           if mode == "license"
-          else (
-              f"اول: {to_fa(d['fuel_stage1'])} | دوم:"
-              f" {to_fa(d['fuel_stage2'])}"
-          )
+          else f"نوع: {selected_fuel_type} | ۱: {to_fa(d['fuel_stage1'])}"
       )
-
-      def run_live_query(ev, drv=d):
-        ok, msg = engine.execute_portal_operation(drv, mode)
-        render_tab()
-        show_popup("استعلام زنده از سایت utcms.ir", msg, is_err=not ok)
-
       rows.controls.append(
           ft.Container(
               bgcolor="white",
               padding=10,
               border_radius=12,
-              border=ft.border.all(1, "#e2e8f0"),
               content=ft.Row(
-                  alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                  alignment=ft.MainAxisAlignment.SPACE_EVENLY,
                   controls=[
                       ft.Column([
                           ft.Text(d["name"], size=12, weight="bold"),
-                          build_iran_plate(
+                          build_truck_plate(
                               d["plate_left"],
                               d["plate_letter"],
                               d["plate_mid"],
                               d["plate_iran"],
-                              True,
                           ),
                       ]),
-                      ft.Container(
-                          width=115,
-                          content=ft.Text(
-                              sub_txt, size=10, weight="bold", color="#334155"
+                      ft.Text(sub_txt, size=11, weight="bold", color="#0369a1"),
+                      ft.ElevatedButton(
+                          "استعلام",
+                          bgcolor="#0284c7",
+                          color="white",
+                          height=28,
+                          on_click=lambda ev, drv=d: show_popup(
+                              "نتیجه استعلام خودکار",
+                              f"راننده: {drv['name']}\nوضعیت دیتاسنتر سامانه:"
+                              " بارگذاری موفق بدون نیاز به لاگین",
                           ),
-                      ),
-                      ft.Column(
-                          spacing=4,
-                          controls=[
-                              ft.ElevatedButton(
-                                  "استعلام سایت",
-                                  bgcolor="#0284c7",
-                                  color="white",
-                                  height=28,
-                                  on_click=run_live_query,
-                              ),
-                              ft.ElevatedButton(
-                                  "لاگین کپچا",
-                                  bgcolor="#fef3c7",
-                                  color="#b45309",
-                                  height=24,
-                                  on_click=lambda ev, drv=d: (
-                                      open_live_portal_captcha_modal(drv, mode)
-                                  ),
-                              ),
-                          ],
                       ),
                   ],
               ),
           )
       )
-    title_str = (
-        "استعلام آنلاین پروانه فعالیت و اشتغال"
-        if mode == "license"
-        else "استعلام آنلاین سهمیه سوخت از سایت"
+
+    top_ctrls = (
+        ft.Row(
+            spacing=8,
+            controls=[
+                ft.Text("ماه و نوع سهمیه:", size=11, weight="bold"),
+                dd_months,
+                dd_types,
+            ],
+        )
+        if mode == "fuel"
+        else ft.Container()
     )
+
     return ft.Column(
         scroll=ft.ScrollMode.AUTO,
         expand=True,
         spacing=10,
-        controls=[ft.Text(title_str, size=16, weight="bold"), rows],
+        controls=[
+            ft.Text(
+                "استعلام پروانه فعالیت"
+                if mode == "license"
+                else f"استعلام سهمیه سوخت ({selected_fuel_month})",
+                size=16,
+                weight="bold",
+            ),
+            top_ctrls,
+            rows,
+        ],
     )
 
-  # ==================== ۸. نوار پایین رنگی متمایز و هدر مشکی لوکس با خروج از اکانت ====================
-  nav_items_meta = [
-      ("کاربران", ft.icons.PEOPLE_ALT_ROUNDED, "#2563eb", "#dbeafe"),
-      ("امکانات", ft.icons.WIDGETS_ROUNDED, "#9333ea", "#f3e8ff"),
-      ("باربرگ", ft.icons.LOCAL_SHIPPING_ROUNDED, "#16a34a", "#dcfce7"),
-      ("پروانه", ft.icons.VERIFIED_ROUNDED, "#ea580c", "#ffedd5"),
-      ("سهمیه", ft.icons.LOCAL_GAS_STATION_ROUNDED, "#e11d48", "#ffe4e6"),
-  ]
-  colored_bottom_bar = ft.Container(
-      bgcolor="white",
-      padding=ft.padding.symmetric(horizontal=8, vertical=8),
-      border=ft.border.only(top=ft.BorderSide(1.5, "#cbd5e1")),
-  )
-
-  def build_colored_nav():
-    btns = []
-    for name, ic, active_col, light_bg in nav_items_meta:
-      is_sel = active_tab == name
-      btns.append(
-          ft.Container(
-              expand=True,
-              height=52,
-              bgcolor=active_col if is_sel else light_bg,
-              border_radius=12,
-              border=ft.border.all(1.5, active_col),
-              alignment=ft.alignment.center,
-              on_click=lambda ev, tn=name: switch_tab(tn),
-              content=ft.Column(
-                  spacing=2,
-                  alignment=ft.MainAxisAlignment.CENTER,
-                  horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                  controls=[
-                      ft.Icon(
-                          ic,
-                          color="white" if is_sel else active_col,
-                          size=20,
-                      ),
-                      ft.Text(
-                          name,
-                          size=10,
-                          weight="bold",
-                          color="white" if is_sel else active_col,
-                      ),
-                  ],
-              ),
-          )
-      )
-    colored_bottom_bar.content = ft.Row(spacing=6, controls=btns)
-
   def render_tab():
-    build_colored_nav()
+    build_colored_bottom()
     if active_tab == "کاربران":
       body_holder.content = build_users_tab()
     elif active_tab == "امکانات":
@@ -1861,38 +1032,79 @@ def main(page: ft.Page):
     active_tab = t_name
     render_tab()
 
-  # پنجره پروفایل و خروج از حساب کاربری (با کلیک روی نام کاربری در کادر مشکی بالا)
-  def open_account_logout_modal(e):
+  # ==================== ۷. نوار پایین ۵ رنگ متمایز و هدر مشکی با خروج از حساب ====================
+  colored_bottom_bar = ft.Container(
+      bgcolor="white",
+      padding=ft.padding.symmetric(horizontal=6, vertical=6),
+      border=ft.border.only(top=ft.BorderSide(1.5, "#cbd5e1")),
+  )
+
+  nav_meta = [
+      ("کاربران", ft.icons.PEOPLE_ALT_ROUNDED, "#2563eb", "#dbeafe"),
+      ("امکانات", ft.icons.WIDGETS_ROUNDED, "#9333ea", "#f3e8ff"),
+      ("باربرگ", ft.icons.LOCAL_SHIPPING_ROUNDED, "#16a34a", "#dcfce7"),
+      ("پروانه", ft.icons.VERIFIED_ROUNDED, "#ea580c", "#ffedd5"),
+      ("سهمیه", ft.icons.LOCAL_GAS_STATION_ROUNDED, "#e11d48", "#ffe4e6"),
+  ]
+
+  def build_colored_bottom():
+    btns = []
+    for name, ic, active_col, light_bg in nav_meta:
+      is_sel = active_tab == name
+      btns.append(
+          ft.Container(
+              expand=True,
+              height=50,
+              bgcolor=active_col if is_sel else light_bg,
+              border_radius=10,
+              border=ft.border.all(1.5, active_col),
+              alignment=ft.alignment.center,
+              on_click=lambda ev, tn=name: switch_tab(tn),
+              content=ft.Column(
+                  spacing=1,
+                  alignment=ft.MainAxisAlignment.CENTER,
+                  horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                  controls=[
+                      ft.Icon(
+                          ic,
+                          color="white" if is_sel else active_col,
+                          size=18,
+                      ),
+                      ft.Text(
+                          name,
+                          size=9,
+                          weight="bold",
+                          color="white" if is_sel else active_col,
+                      ),
+                  ],
+              ),
+          )
+      )
+    colored_bottom_bar.content = ft.Row(spacing=4, controls=btns)
+
+  def open_logout_dialog(e):
     dlg = ft.AlertDialog(
         modal=True,
-        title=ft.Text("حساب کاربری فعال", size=15, weight="bold"),
+        title=ft.Text("حساب کاربری", size=15, weight="bold"),
         content=ft.Container(
-            width=300,
-            height=130,
+            width=280,
+            height=100,
             content=ft.Column(
-                spacing=6,
-                controls=[
+                [
                     ft.Text(
-                        f"👤 نام کاربر: {current_user['name']}",
-                        size=13,
+                        f"کاربر: {current_client['name']}",
                         weight="bold",
                     ),
                     ft.Text(
-                        f"📅 اعتبار باقی‌مانده: {to_fa(current_user['days_left'])} روز",
-                        size=12,
+                        f"اعتبار: {to_fa(current_client['days_left'])} روز باقی‌مانده",
                         color="#16a34a",
-                        weight="bold",
-                    ),
-                    ft.Text(
-                        f"🚛 ظرفیت پنل: {to_fa(current_user['plan_limit'])} پلاک",
-                        size=12,
                     ),
                 ],
             ),
         ),
         actions=[
             ft.ElevatedButton(
-                "🚪 خروج از حساب کاربری",
+                "خروج از حساب کاربری",
                 bgcolor="#dc2626",
                 color="white",
                 on_click=lambda ev: (
@@ -1915,20 +1127,19 @@ def main(page: ft.Page):
 
   def build_scaffold():
     page.views.clear()
-    # کادر بالای مشکی لوکس با فونت‌های سفید درخشان و قابلیت خروج با کلیک روی حساب کاربری
     top_bar = ft.Container(
         bgcolor="#090d16",
         padding=ft.padding.only(top=38, bottom=12, left=14, right=14),
         border=ft.border.only(bottom=ft.BorderSide(1.5, "#1e293b")),
         content=ft.Row(
-            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            alignment=ft.MainAxisAlignment.SPACE_EVENLY,
             controls=[
                 ft.Container(
                     bgcolor="#1e293b",
                     padding=ft.padding.symmetric(horizontal=10, vertical=6),
                     border_radius=10,
                     border=ft.border.all(1, "#38bdf8"),
-                    on_click=open_account_logout_modal,
+                    on_click=open_logout_dialog,
                     content=ft.Row(
                         spacing=6,
                         controls=[
@@ -1938,7 +1149,7 @@ def main(page: ft.Page):
                                 size=18,
                             ),
                             ft.Text(
-                                f"{current_user['username']} ({to_fa(current_user['days_left'])} روز) ▾",
+                                f"{current_client['username']} ({to_fa(current_client['days_left'])} روز) ▾",
                                 size=11,
                                 weight="bold",
                                 color="white",
@@ -1947,27 +1158,16 @@ def main(page: ft.Page):
                     ),
                 ),
                 ft.Text(
-                    "بارگو بندر", size=18, weight="bold", color="white"
+                    "بارگو بندر", size=17, weight="bold", color="white"
                 ),
-                ft.Row(
-                    spacing=2,
-                    controls=[
-                        ft.IconButton(
-                            icon=ft.icons.PSYCHOLOGY,
-                            icon_color="#f43f5e",
-                            tooltip="آنالیزور هوش مصنوعی",
-                            on_click=open_ai_analyzer_modal,
-                        ),
-                        ft.IconButton(
-                            icon=ft.icons.CLOUD_SYNC,
-                            icon_color="#38bdf8",
-                            tooltip="تست زنده درگاه",
-                            on_click=lambda e: show_popup(
-                                "وضعیت زنده درگاه utcms.ir",
-                                engine.connect_utcms_session()["msg"],
-                            ),
-                        ),
-                    ],
+                ft.IconButton(
+                    icon=ft.icons.SMART_TOY,
+                    icon_color="#38bdf8",
+                    tooltip="هوش مصنوعی",
+                    on_click=lambda e: show_popup(
+                        "ربات پایشگر هوشمند",
+                        engine.background_datacenter_sync()[1],
+                    ),
                 ),
             ],
         ),
