@@ -31,23 +31,14 @@ jobs:
       - name: Set up Flutter Stable
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.27.4"
+          flutter-version: "3.22.2"
           channel: "stable"
           cache: true
 
-      - name: Accept Android SDK Licenses
-        run: |
-          yes | sudo $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-
-      - name: Install Python Dependencies & Prepare Requirements
+      - name: Install Python Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install "chardet<7.0.0" flet==0.26.0 httpx beautifulsoup4
-          cat << 'EOF' > requirements.txt
-          flet==0.26.0
-          httpx
-          beautifulsoup4
-          EOF
+          pip install flet==0.24.1 httpx
 
       - name: Build APK with Flet
         run: |
