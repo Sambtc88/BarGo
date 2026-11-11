@@ -1,4 +1,2 @@
-flet
+flet==0.26.0
 httpx
-beautifulsoup4
-
